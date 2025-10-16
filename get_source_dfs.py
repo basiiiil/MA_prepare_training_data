@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from befunde_merge_and_filter import dedup_befunde, get_unique_befunde_per_case_day, get_befunde_from_files
+from merge_and_filter_labor import filter_for_relevant_rows, normalize_ids_and_timestamps
+from merge_and_filter_befunde import dedup_befunde, get_unique_befunde_per_case_day, get_befunde_from_files
+from util_functions import get_complete_laborwerte_ddf
 
 
 def get_stammdaten_inpatients_df():
@@ -11,10 +13,10 @@ def get_stammdaten_inpatients_df():
     df_source = pd.read_csv(
         'fromDIZ/Stammdaten/24.07.2025_Patientenliste_3-222_Stammdaten_sf.csv',
         dtype={
-            'Fallnummer': 'Int64',
-            'Patientennummer': 'Int64',
-            'Alter': 'Int64',
-            'Aufnahmedatum': str,
+            'Fallnummer': np.int_,
+            'Patientennummer': np.int_,
+            'Alter': np.int_,
+            'Aufnahmedatum': np.str_,
         },
         usecols=[
             'Fallnummer',
@@ -29,9 +31,9 @@ def get_stammdaten_inpatients_df():
     df_source_nachgereicht = pd.read_csv(
         'fromDIZ/Stammdaten/Stammdaten.csv',
         dtype={
-            'Patient': 'Int64',
-            'Fall': 'Int64',
-            'GebDatum': str
+            'Patient': np.int_,
+            'Fall': np.int_,
+            'GebDatum': np.str_
         },
         usecols=[
             'Fall',
@@ -87,9 +89,9 @@ def get_prozeduren_df():
     df_source = pd.read_csv(
         'fromDIZ/Prozeduren/25.07.2025_Prozeduren_sf.csv',
         dtype={
-            'Fall': 'Int64',
-            'OP-Code Beg.': str,
-            'BegZeit': str
+            'Fall': np.int_,
+            'OP-Code Beg.': np.str_,
+            'BegZeit': np.str_
         },
         usecols=[
             'Fall',
@@ -102,8 +104,8 @@ def get_prozeduren_df():
     df_source_nachgereicht = pd.read_csv(
         'fromDIZ/Prozeduren/fehlende Prozeduren.csv',
         dtype={
-            'Fallnummer': 'Int64',
-            'Prozedurzeit': str
+            'Fallnummer': np.int_,
+            'Prozedurzeit': np.str_
         },
         usecols=[
             'Fallnummer',
@@ -146,3 +148,19 @@ def get_prozeduren_df():
           f"sind eindeutig. Sie gehören zu {len(df_fallnummern_dedup)} Fallnummern.")
 
     return df_prozeduren_dedup
+
+def get_labor_ddf():
+    ddf_labor = get_complete_laborwerte_ddf()
+    missing_fallnummer_count = ddf_labor['Fallnummer'].isna().sum().compute()
+    if missing_fallnummer_count > 0:
+        print(
+            f"--------- Warnung: Es wurden {missing_fallnummer_count} Zeilen "
+            f"ohne Fallnummer in ddf_labor gefunden. Diese werden entfernt.")
+    else:
+        print("-------- Keine Laborwerte ohne Fallnummer")
+    ddf_labor_filtered = filter_for_relevant_rows(ddf_labor)
+    ddf_labor_normalized = normalize_ids_and_timestamps(ddf_labor_filtered)
+    print(ddf_labor['Ergebniswert'].isnull().sum())
+    print(ddf_labor['Ergebniswert'].notnull().sum())
+
+    return ddf_labor_normalized

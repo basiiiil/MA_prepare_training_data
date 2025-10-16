@@ -5,6 +5,7 @@ ausführen, sodass am Ende nur dieses Script bedient werden muss.
 import pandas as pd
 from get_source_dfs import get_stammdaten_inpatients_df, get_prozeduren_df, get_befunde_df
 from merge_befunde_and_prozeduren import merge_befunde_and_prozeduren
+from add_laborwerte_to_prozeduren import add_laborwerte_to_prozeduren
 
 LABOR_WINDOW_SIZE = 24 * 7 # Fenster der einzubeziehenden Laborwerte, in Stunden
 
@@ -55,13 +56,19 @@ def main():
     print(f"Von {len(df_befunde_inpatients)} Befunden stationärer Fälle "
           f"wurden {len(df_prozeduren_final)} in den Stammdaten gefunden.")
 
+    # 3. Datums- und Zeitspalten in datetime Objekte umwandeln
     df_prozeduren_final['prozedur_datetime'] = pd.to_datetime(
         df_prozeduren_final['prozedur_datum'] + "_" + df_prozeduren_final['prozedur_zeit'],
         format='%Y-%m-%d_%H:%M:%S',
     )
+    # 3.1 Neue Spalte für Beginn des Laborzeitfensters definieren
     df_prozeduren_final['prozedur_fenster_start'] = pd.to_datetime(
-        df_prozeduren_final['prozedur_datum'] - pd.Timedelta(hours=LABOR_WINDOW_SIZE),
+        df_prozeduren_final['prozedur_datetime'] - pd.Timedelta(hours=LABOR_WINDOW_SIZE),
     )
+
+    # Laborwerte zu Prozeduren hinzufügen
+    df_prozeduren_with_labor = add_laborwerte_to_prozeduren(df_prozeduren_final)
+    # print(len(df_prozeduren_with_labor))
 
 
 

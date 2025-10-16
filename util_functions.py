@@ -1,4 +1,6 @@
 import os
+
+import numpy as np
 import pandas as pd
 import datetime
 from dask import dataframe as dd
@@ -89,19 +91,19 @@ def concat_csv_files(folder_path, csv_dtype="string", csv_sep=",", csv_encoding=
 
 def get_complete_laborwerte_ddf():
     dtype_lib = {
-        'Auftragsnummer': 'Int64',
-        'Fallnummer': 'Int64',
-        'Probeneingangsdatum': 'string',
-        'Ergebnisdatum': 'string',
-        'Parameterbezeichnung': 'string',
-        'Ergebniswert': 'string',
-        'Ergebniseinheit': 'string',
-        'Ergebniseinheit (UCUM)': 'string',
-        'Referenzwert unten': 'string',
-        'Referenzwert oben': 'string',
-        'Parameter-ID primär': 'string',
-        'LOINC-Code': 'string',
-        'Probenart': 'string',
+        'Auftragsnummer': np.int_,
+        'Fallnummer': np.int_,
+        'Probeneingangsdatum': np.str_,
+        'Ergebnisdatum': np.str_,
+        'Parameterbezeichnung': np.str_,
+        'Ergebniswert': np.str_,
+        'Ergebniseinheit': np.str_,
+        'Ergebniseinheit (UCUM)': np.str_,
+        'Referenzwert unten': np.str_,
+        'Referenzwert oben': np.str_,
+        'Parameter-ID primär': np.str_,
+        'LOINC-Code': np.str_,
+        'Probenart': np.str_,
     }
 
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Lese die Labor-CSVs...")
@@ -114,7 +116,7 @@ def get_complete_laborwerte_ddf():
     col_names = df_col_names.head(1).squeeze().tolist()
     df_labor_original = dd.read_csv(
         urlpath='fromDIZ/Laborwerte/20250929_LAE_Risiko_laboruntersuchungen_AS.csv',
-        dtype=dtype_lib,
+        # dtype=dtype_lib,
         usecols=dtype_lib.keys(),
         delimiter=';',
         decimal=',',

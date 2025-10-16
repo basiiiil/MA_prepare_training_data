@@ -2,7 +2,6 @@ import datetime
 from dask import dataframe as dd
 import pandas as pd
 # import numpy as np
-import re
 
 from util_functions import get_complete_laborwerte_ddf
 
@@ -46,13 +45,15 @@ dtype_lib_befunde = {
 
 def filter_for_relevant_rows(ddf):
     # Erstelle numerische Spalten
-    ddf['Ergebniswert_num'] = dd.to_numeric(
+    ddf['ergebniswert_num'] = dd.to_numeric(
         ddf['Ergebniswert'].str.replace(',', '.').str.replace('<', '').str.replace('>', ''),
         errors='coerce'
     )
     ddf_clean = ddf[
         ddf['Parameterbezeichnung'].notnull()
-        & ddf['Ergebniswert_num'].notnull()
+        & ddf['ergebniswert_num'].notnull()
+        & ddf['Fallnummer'].notnull()
+        & ddf['Probeneingangsdatum'].notnull()
     ].copy()
 
     return ddf_clean
@@ -132,27 +133,17 @@ def normalize_ids_and_timestamps(ddf):
 
     return ddf
 
-def merge_labor_on_proz(ddf_labor, ddf_befunde):
-    """
-    :param ddf_labor: dask dataframe
-    :param ddf_befunde: dask dataframe
-    :return: dask dataframe
-
-    Finde zu jedem Laboreintrag die passende Prozedur.
-    Zu jeder Prozedur müssen alle Laborwerte zugeordnet werden, die X Stunden vor der Prozedur erhoben wurden
-    """
-
 def main():
     ddf_labor = get_complete_laborwerte_ddf()
-    ddf_befunde = dd.read_csv(
-        'Outputs/2025-10-15_Befunde_15to22_with_proz.csv',
-        usecols=list(dtype_lib_befunde.keys()),
-        dtype=dtype_lib_befunde,
-    )
+    # ddf_befunde = dd.read_csv(
+    #     'Outputs/2025-10-15_Befunde_15to22_with_proz.csv',
+    #     usecols=list(dtype_lib_befunde.keys()),
+    #     dtype=dtype_lib_befunde,
+    # )
 
-    ddf_befunde_dedup = ddf_befunde.drop_duplicates(subset=['Fallnummer']).copy()
-    ddf_labor_merged = dd.merge(ddf_labor, ddf_befunde_dedup, on=['Fallnummer'], how='inner')
-    ddf_labor_filtered = filter_for_relevant_rows(ddf_labor_merged)
+    # ddf_befunde_dedup = ddf_befunde.drop_duplicates(subset=['Fallnummer']).copy()
+    # ddf_labor_merged = dd.merge(ddf_labor, ddf_befunde_dedup, on=['Fallnummer'], how='inner')
+    ddf_labor_filtered = filter_for_relevant_rows(ddf_labor)
     ddf_labor_normalized = normalize_ids_and_timestamps(ddf_labor_filtered)
 
     ddf_labor_normalized.head(10000).to_csv(
@@ -160,9 +151,6 @@ def main():
         # single_file=True,
         index=False,
     )
-
-
-
 
 if __name__ == '__main__':
     main()
