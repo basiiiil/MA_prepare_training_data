@@ -70,6 +70,25 @@ def main():
     df_prozeduren_with_labor = add_laborwerte_to_prozeduren(df_prozeduren_final)
     # print(len(df_prozeduren_with_labor))
 
+    # Berechne die Zeitdifferenz zwischen Prozedur und Laborabnahme
+    time_delta_seconds = (
+            df_prozeduren_with_labor['prozedur_datetime'] - df_prozeduren_with_labor[
+        'abnahmezeitpunkt_effektiv']
+    ).dt.total_seconds()
+
+    # Rechne es in eine praktischere Einheit um, z.B. Stunden vor der Prozedur
+    df_prozeduren_with_labor['stunden_vor_prozedur'] = time_delta_seconds / 3600
+
+    # Analysiere die Verteilung dieser Zeitdifferenz für die häufigsten Parameter
+    # Wir können uns z.B. die deskriptive Statistik pro Parameter ansehen
+    zeitverteilung_stats = df_prozeduren_with_labor.groupby(
+        'parameterid_effektiv'
+    )['stunden_vor_prozedur'].describe()
+
+    # Ergebnis berechnen und anzeigen
+    print("\nZeitliche Verteilung der Laborparameter (in Stunden vor der Prozedur):")
+    print(zeitverteilung_stats.compute())
+
 
 
 if __name__ == "__main__":

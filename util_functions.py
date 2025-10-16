@@ -116,7 +116,7 @@ def get_complete_laborwerte_ddf():
     col_names = df_col_names.head(1).squeeze().tolist()
     df_labor_original = dd.read_csv(
         urlpath='fromDIZ/Laborwerte/20250929_LAE_Risiko_laboruntersuchungen_AS.csv',
-        # dtype=dtype_lib,
+        dtype=dtype_lib,
         usecols=dtype_lib.keys(),
         delimiter=';',
         decimal=',',

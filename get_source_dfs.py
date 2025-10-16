@@ -151,16 +151,7 @@ def get_prozeduren_df():
 
 def get_labor_ddf():
     ddf_labor = get_complete_laborwerte_ddf()
-    missing_fallnummer_count = ddf_labor['Fallnummer'].isna().sum().compute()
-    if missing_fallnummer_count > 0:
-        print(
-            f"--------- Warnung: Es wurden {missing_fallnummer_count} Zeilen "
-            f"ohne Fallnummer in ddf_labor gefunden. Diese werden entfernt.")
-    else:
-        print("-------- Keine Laborwerte ohne Fallnummer")
     ddf_labor_filtered = filter_for_relevant_rows(ddf_labor)
     ddf_labor_normalized = normalize_ids_and_timestamps(ddf_labor_filtered)
-    print(ddf_labor['Ergebniswert'].isnull().sum())
-    print(ddf_labor['Ergebniswert'].notnull().sum())
 
     return ddf_labor_normalized
