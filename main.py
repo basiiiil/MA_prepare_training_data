@@ -81,9 +81,9 @@ def main():
 
     # Analysiere die Verteilung dieser Zeitdifferenz für die häufigsten Parameter
     # Wir können uns z.B. die deskriptive Statistik pro Parameter ansehen
-    zeitverteilung_stats = df_prozeduren_with_labor.groupby(
-        'parameterid_effektiv'
-    )['stunden_vor_prozedur'].describe()
+    zeitverteilung_stats = df_prozeduren_with_labor['stunden_vor_prozedur'].groupby(
+        df_prozeduren_with_labor['parameterid_effektiv']
+    ).describe()
 
     # Ergebnis berechnen und anzeigen
     print("\nZeitliche Verteilung der Laborparameter (in Stunden vor der Prozedur):")

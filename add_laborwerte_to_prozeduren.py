@@ -18,7 +18,7 @@ def add_laborwerte_to_prozeduren(df_prozeduren_final):
         ddf_labor,
         on=['Fallnummer'],
         how='left',
-    )
+    ).reset_index(drop=True)
     query_str = 'prozedur_fenster_start <= abnahmezeitpunkt_effektiv <= prozedur_datetime'
     ddf_labor_filtered = ddf_merged.query(query_str)
 
