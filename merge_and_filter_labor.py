@@ -121,6 +121,7 @@ def normalize_ids_and_timestamps(ddf):
         ddf['Probeneingangsdatum'],
         format='%Y-%m-%dT%H:%M:%S%z',
     )
+    ddf['Probeneingangsdatum'] = ddf['Probeneingangsdatum'].dt.tz_localize(None)
     meta = ('abnahmezeitpunkt_effektiv', ddf['Probeneingangsdatum'].dtype)
     ddf['abnahmezeitpunkt_effektiv'] = ddf.map_partitions(
         calculate_effective_time,
