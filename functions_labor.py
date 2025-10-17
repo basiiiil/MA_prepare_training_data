@@ -58,6 +58,21 @@ def filter_for_relevant_rows(ddf):
 
     return ddf_clean
 
+def filter_for_relevant_rows_pandas(ddf):
+    # Erstelle numerische Spalten
+    ddf['ergebniswert_num'] = pd.to_numeric(
+        ddf['Ergebniswert'].str.replace(',', '.').str.replace('<', '').str.replace('>', ''),
+        errors='coerce'
+    )
+    ddf_clean = ddf[
+        ddf['Parameterbezeichnung'].notnull()
+        & ddf['ergebniswert_num'].notnull()
+        & ddf['Fallnummer'].notnull()
+        & ddf['Probeneingangsdatum'].notnull()
+    ].copy()
+
+    return ddf_clean
+
 def calculate_effective_time(partition_df, pattern):
     """
     Calculates the new 'abnahmezeitpunkt_effektiv' for a single partition.
@@ -117,9 +132,13 @@ def normalize_ids_and_timestamps(ddf):
         ddf['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
         'O-GLU_Z.x'
     )
+    ddf['parameterbezeichnung_effektiv'] = ddf['Parameterbezeichnung'].mask(
+        ddf['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
+        'Glukose AccuChek'
+    )
     ddf['Probeneingangsdatum'] = dd.to_datetime(
         ddf['Probeneingangsdatum'],
-        format='%Y-%m-%dT%H:%M:%S%z',
+        format='%Y-%m-%dT%H:%M:%S%z'
     )
     ddf['Probeneingangsdatum'] = ddf['Probeneingangsdatum'].dt.tz_localize(None)
     meta = ('abnahmezeitpunkt_effektiv', ddf['Probeneingangsdatum'].dtype)
@@ -127,23 +146,37 @@ def normalize_ids_and_timestamps(ddf):
         calculate_effective_time,
         r"O-GLU_Z\.(\d{4})",
         meta=meta,
-        # columns=['Parameter-ID primär', 'Probeneingangsdatum']
     )
-    # print(ddf['parameterid_effektiv'].value_counts())
-    # ddf['abnahmezeitpunkt_effektiv'] = ddf.apply(get_abnahmezeitpunkt, axis=1)
 
     return ddf
 
+def normalize_ids_and_timestamps_pandas(df):
+    print(
+        datetime.datetime.now().strftime("%H:%M:%S")
+        + " - Korrigiere Parameter-ID und Auftragszeitpunkt für Glukose AccuCheck..."
+    )
+
+    df['parameterid_effektiv'] = df['Parameter-ID primär'].mask(
+        df['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
+        'O-GLU_Z.x'
+    )
+    df['parameterbezeichnung_effektiv'] = df['Parameterbezeichnung'].mask(
+        df['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
+        'Glukose AccuChek'
+    )
+    df['Probeneingangsdatum'] = pd.to_datetime(
+        df['Probeneingangsdatum'],
+        format='%Y-%m-%dT%H:%M:%S%z',
+        errors='coerce'
+    )
+    df['Probeneingangsdatum'] = df['Probeneingangsdatum'].dt.tz_localize(None)
+    df['abnahmezeitpunkt_effektiv'] = calculate_effective_time(df,r"O-GLU_Z\.(\d{4})")
+
+    return df
+
 def main():
     ddf_labor = get_complete_laborwerte_ddf()
-    # ddf_befunde = dd.read_csv(
-    #     'Outputs/2025-10-15_Befunde_15to22_with_proz.csv',
-    #     usecols=list(dtype_lib_befunde.keys()),
-    #     dtype=dtype_lib_befunde,
-    # )
 
-    # ddf_befunde_dedup = ddf_befunde.drop_duplicates(subset=['Fallnummer']).copy()
-    # ddf_labor_merged = dd.merge(ddf_labor, ddf_befunde_dedup, on=['Fallnummer'], how='inner')
     ddf_labor_filtered = filter_for_relevant_rows(ddf_labor)
     ddf_labor_normalized = normalize_ids_and_timestamps(ddf_labor_filtered)
 

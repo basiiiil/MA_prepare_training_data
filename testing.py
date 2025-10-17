@@ -1,21 +1,34 @@
-import pandas as pd
-import numpy as np
+from main import get_labelled_prozeduren
+from merge_data import add_laborwerte_to_prozeduren
+import datetime
 
-df = pd.read_csv(
-    # 'Outputs/2025-10-15_Befunde_15to22_with_proz.csv',
-    'Merged source files/2025-10-08_Prozeduren_3-222_with_behandlungsart.csv',
-    dtype={
-        'start_date': 'string',
-        'start_time': 'string',
-        'Behandlungsart': 'string',
-    },
-)
+print(datetime.datetime.now().strftime("%H:%M:%S") + " - Let's go!")
+df_prozeduren_final = get_labelled_prozeduren()
 
-print(df.shape)
-df_grouped = df.groupby('Fallnummer')[['Behandlungsart']].nunique()
-print(df_grouped.value_counts())
+# Laborwerte zu Prozeduren hinzufügen
+ddf_analyse = add_laborwerte_to_prozeduren(df_prozeduren_final)
+ddf_analyse['geburtsjahr'] = ddf_analyse['geburtsdatum'].dt.year
 
-df_fallnummern_unique = df.drop_duplicates(subset=['Fallnummer']).copy()
-print(df_fallnummern_unique.shape)
-df_fallnr_art_unique = df.drop_duplicates(subset=['Fallnummer', 'Behandlungsart']).copy()
-print(df_fallnr_art_unique.shape)
+ddf_analyse_pd = ddf_analyse[[
+    'Fallnummer',
+    'parameterbezeichnung_effektiv',
+    'parameterid_effektiv',
+    'geburtsdatum',
+    'alter_bei_prozedur',
+    'altersdekade_bei_prozedur',
+    'geschlecht'
+]].copy().compute()
+
+ddf_grouped = ddf_analyse_pd.groupby(
+    by=[
+        'parameterbezeichnung_effektiv',
+        'parameterid_effektiv',
+        'altersdekade_bei_prozedur',
+        'geschlecht'
+    ],
+    as_index=False,
+).size()
+# ddf_grouped.to_csv(
+#     'Analyse Laborwerttabelle/2025-10-17_analyse_dekade_geschlecht_2.csv',
+#     index=False,
+# )

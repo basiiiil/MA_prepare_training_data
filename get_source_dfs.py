@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 
-from merge_and_filter_labor import filter_for_relevant_rows, normalize_ids_and_timestamps
-from merge_and_filter_befunde import dedup_befunde, get_unique_befunde_per_case_day, get_befunde_from_files
-from util_functions import get_complete_laborwerte_ddf
+from functions_labor import filter_for_relevant_rows, normalize_ids_and_timestamps, filter_for_relevant_rows_pandas, \
+    normalize_ids_and_timestamps_pandas
+from functions_befunde import dedup_befunde, get_unique_befunde_per_case_day, get_befunde_from_files
+from util_functions import get_complete_laborwerte_ddf, get_complete_laborwerte_df_pandas
 
 
 def get_stammdaten_inpatients_df():
@@ -14,30 +15,30 @@ def get_stammdaten_inpatients_df():
         'fromDIZ/Stammdaten/24.07.2025_Patientenliste_3-222_Stammdaten_sf.csv',
         dtype={
             'Fallnummer': np.int_,
-            'Patientennummer': np.int_,
+            # 'Patientennummer': np.int_,
             'Alter': np.int_,
-            'Aufnahmedatum': np.str_,
+            # 'Aufnahmedatum': np.str_,
         },
         usecols=[
             'Fallnummer',
-            'Patientennummer',
+            # 'Patientennummer',
             'Geschlecht',
             'Alter',
             'Bewegung Behandlungsart',
-            'Aufnahmedatum'
+            # 'Aufnahmedatum'
         ]
     )
 
     df_source_nachgereicht = pd.read_csv(
         'fromDIZ/Stammdaten/Stammdaten.csv',
         dtype={
-            'Patient': np.int_,
+            # 'Patient': np.int_,
             'Fall': np.int_,
             'GebDatum': np.str_
         },
         usecols=[
             'Fall',
-            'Patient',
+            # 'Patient',
             'G',
             'GebDatum',
             'Fa'
@@ -45,24 +46,51 @@ def get_stammdaten_inpatients_df():
     )
 
     df_source['behandlungsart'] = df_source['Bewegung Behandlungsart']
-    df_source['Alter'] = pd.to_timedelta(df_source['Alter'] * 365.25, unit='days')
-    df_source['Aufnahmedatum'] = pd.to_datetime(df_source['Aufnahmedatum'], format='%Y-%m-%d')
-    df_source['geburtsdatum'] = df_source['Aufnahmedatum'] - df_source['Alter']
     df_source['geschlecht'] = df_source['Geschlecht']
+    # df_source['geburtsdatum'] = np.nan
+    df_source['alter'] = df_source['Alter']
 
     df_source_nachgereicht['Fallnummer'] = df_source_nachgereicht['Fall']
-    df_source_nachgereicht['Patientennummer'] = df_source_nachgereicht['Patient']
-    df_source_nachgereicht['geschlecht'] = df_source_nachgereicht['G']
+    # df_source_nachgereicht['Patientennummer'] = df_source_nachgereicht['Patient']
     df_source_nachgereicht['behandlungsart'] = df_source_nachgereicht['Fa']
-    df_source_nachgereicht['geburtsdatum'] = pd.to_datetime(df_source_nachgereicht['GebDatum'], format='%Y-%m-%d')
+    df_source_nachgereicht['geschlecht'] = df_source_nachgereicht['G']
+    df_source_nachgereicht['geburtsdatum'] = pd.to_datetime(
+        df_source_nachgereicht['GebDatum'], format='%Y-%m-%d'
+    )
+    # df_source_nachgereicht['alter'] = np.nan
 
     # 3. Merge all Fallnummern and drop duplicates
     df_stammdaten_all = pd.concat(
         [
-            df_source[['Fallnummer', 'Patientennummer', 'geschlecht', 'geburtsdatum', 'behandlungsart']],
-            df_source_nachgereicht[['Fallnummer', 'Patientennummer', 'geschlecht', 'geburtsdatum', 'behandlungsart']],
+            df_source[
+                [
+                    'Fallnummer',
+                    'geschlecht',
+                    # 'geburtsdatum',
+                    'alter',
+                    'behandlungsart'
+                ]
+            ],
+            df_source_nachgereicht[
+                [
+                    'Fallnummer',
+                    'geschlecht',
+                    'geburtsdatum',
+                    # 'alter',
+                    'behandlungsart'
+                ]
+            ],
         ]
     )
+    # df_stammdaten_all = df_source[
+    #     [
+    #         'Fallnummer',
+    #         'geschlecht',
+    #         # 'geburtsdatum',
+    #         'alter',
+    #         'behandlungsart'
+    #     ]
+    # ]
     df_stammdaten_all_inpatients = df_stammdaten_all[
         df_stammdaten_all['behandlungsart'] == 'Stationär'
     ].reset_index(drop=True)
@@ -153,5 +181,12 @@ def get_labor_ddf():
     ddf_labor = get_complete_laborwerte_ddf()
     ddf_labor_filtered = filter_for_relevant_rows(ddf_labor)
     ddf_labor_normalized = normalize_ids_and_timestamps(ddf_labor_filtered)
+
+    return ddf_labor_normalized
+
+def get_labor_df_pandas():
+    df_labor = get_complete_laborwerte_df_pandas()
+    df_labor_filtered = filter_for_relevant_rows_pandas(df_labor)
+    ddf_labor_normalized = normalize_ids_and_timestamps_pandas(df_labor_filtered)
 
     return ddf_labor_normalized

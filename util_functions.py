@@ -91,19 +91,19 @@ def concat_csv_files(folder_path, csv_dtype="string", csv_sep=",", csv_encoding=
 
 def get_complete_laborwerte_ddf():
     dtype_lib = {
-        'Auftragsnummer': np.int_,
+        # 'Auftragsnummer': np.int_,
         'Fallnummer': np.int_,
         'Probeneingangsdatum': np.str_,
-        'Ergebnisdatum': np.str_,
+        # 'Ergebnisdatum': np.str_,
         'Parameterbezeichnung': np.str_,
         'Ergebniswert': np.str_,
-        'Ergebniseinheit': np.str_,
-        'Ergebniseinheit (UCUM)': np.str_,
-        'Referenzwert unten': np.str_,
-        'Referenzwert oben': np.str_,
+        # 'Ergebniseinheit': np.str_,
+        # 'Ergebniseinheit (UCUM)': np.str_,
+        # 'Referenzwert unten': np.str_,
+        # 'Referenzwert oben': np.str_,
         'Parameter-ID primär': np.str_,
-        'LOINC-Code': np.str_,
-        'Probenart': np.str_,
+        # 'LOINC-Code': np.str_,
+        # 'Probenart': np.str_,
     }
 
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Lese die Labor-CSVs...")
@@ -135,6 +135,52 @@ def get_complete_laborwerte_ddf():
         blocksize="64MB"
     )
     df_labor_complete = dd.concat([df_labor_original, df_labor_fehlende])
+    return df_labor_complete
+
+def get_complete_laborwerte_df_pandas():
+    dtype_lib = {
+        # 'Auftragsnummer': np.int_,
+        'Fallnummer': np.int_,
+        'Probeneingangsdatum': np.str_,
+        # 'Ergebnisdatum': np.str_,
+        'Parameterbezeichnung': np.str_,
+        'Ergebniswert': np.str_,
+        # 'Ergebniseinheit': np.str_,
+        # 'Ergebniseinheit (UCUM)': np.str_,
+        # 'Referenzwert unten': np.str_,
+        # 'Referenzwert oben': np.str_,
+        'Parameter-ID primär': np.str_,
+        # 'LOINC-Code': np.str_,
+        # 'Probenart': np.str_,
+    }
+
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Lese die Labor-CSVs...")
+    df_col_names = pd.read_csv(
+        'fromDIZ/20250929_LAE_Risiko_labor_Spaltennamen_AS.csv',
+        delimiter=';',
+        header=None,
+        encoding='iso-8859-1'
+    )
+    col_names = df_col_names.head(1).squeeze().tolist()
+    df_labor_original = pd.read_csv(
+        'fromDIZ/Laborwerte/20250929_LAE_Risiko_laboruntersuchungen_AS.csv',
+        dtype=dtype_lib,
+        usecols=list(dtype_lib.keys()),
+        delimiter=';',
+        decimal=',',
+        header=None,
+        names=col_names,
+        encoding='utf_8',
+    )
+    df_labor_fehlende = pd.read_csv(
+        'fromDIZ/Laborwerte/20251007_LAE_Risiko_fehlende_laboruntersuchungen_CW.csv',
+        dtype=dtype_lib,
+        usecols=list(dtype_lib.keys()),
+        delimiter=';',
+        decimal=',',
+        encoding='utf_8',
+    )
+    df_labor_complete = pd.concat([df_labor_original, df_labor_fehlende])
     return df_labor_complete
 
 def write_to_file(df, fn_out):
