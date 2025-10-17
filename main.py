@@ -62,6 +62,7 @@ def get_labelled_prozeduren():
     df_prozeduren_final['prozedur_fenster_start'] = pd.to_datetime(
         df_prozeduren_final['prozedur_datetime'] - pd.Timedelta(hours=LABOR_WINDOW_SIZE),
     )
+    # 3.2 Alter für alle fehlenden Fälle berechnen, als Diff zwischen GebDatum und prozedur_datetime
     alter_aus_gebdatum = df_prozeduren_final['alter'].fillna(
         (df_prozeduren_final['prozedur_datetime'] - df_prozeduren_final['geburtsdatum']).dt.days
     )
@@ -71,17 +72,76 @@ def get_labelled_prozeduren():
     )
     df_prozeduren_final['altersdekade_bei_prozedur'] = np.ceil(df_stammdaten_inpatients['alter'] / 10)
 
+    print(df_prozeduren_final['alter'].isnull().sum())
+    df_prozeduren_final_filtered = df_prozeduren_final[
+        [
+            'Fallnummer',
+            'prozedur_datetime',
+            'prozedur_fenster_start',
+            'alter',
+            'geschlecht',
+            'altersdekade_bei_prozedur'
+        ]
+    ]
+
     return df_prozeduren_final
 
-# def filter_for_latest_results(ddf):
+def get_latest_lab_values(ddf):
+    """
+    Filtert ein Dask DataFrame, um nur den letzten Laborwert pro Fallnummer
+    und Parameter-ID zu behalten.
 
+    Args:
+        ddf (dd.DataFrame): Das DataFrame mit potenziell mehreren Laborwerten
+                            pro Fall und Parameter. Es muss die Spalten 'Fallnummer',
+                            'parameterid_effektiv' und 'abnahmezeitpunkt_effektiv'
+                            enthalten.
 
-def create_laborwerte_violinplot(df_labor, parameter):
+    Returns:
+        dd.DataFrame: Ein gefiltertes DataFrame, das nur noch den jeweils
+                      letzten Laborwert enthält.
+    """
+    print("Filtere nach dem letzten Laborwert pro Fall und Parameter...")
+    # Berechne die neue Spalte 'minuten_vor_prozedur'
+    time_delta_seconds = (
+            ddf['prozedur_datetime'] - ddf['abnahmezeitpunkt_effektiv']
+    ).dt.total_seconds()
+    ddf['minuten_vor_prozedur'] = time_delta_seconds / 60
+
+    # Sortiere das DataFrame so, dass der neueste Wert für jede Gruppe oben steht.
+    # Dies ist eine vorbereitende Operation für drop_duplicates.
+    # persist() kann hier die Performance verbessern, indem das sortierte
+    # Zwischenergebnis im Speicher gehalten wird.
+    ddf_sorted = ddf.sort_values('minuten_vor_prozedur').persist()
+
+    # Behalte nur den ersten Eintrag pro Gruppe ('Fallnummer' und 'parameterid_effektiv').
+    # Da wir absteigend sortiert haben, ist dies automatisch der letzte/neueste Wert.
+    ddf_latest = ddf_sorted.drop_duplicates(subset=[
+        'Fallnummer', 'prozedur_datetime', 'parameterid_effektiv'
+    ]).copy()
+
+    print("Filterung abgeschlossen.")
+    return ddf_latest
+
+def create_laborwerte_violinplot(ddf_labor):
+    # 1. Berechne Anzahl und Mittelwert für jeden Parameter
+    df_analyse = ddf_labor[
+        ['parameterid_effektiv', 'stunden_vor_prozedur']
+    ].copy().compute()
+    zeitverteilung_stats = df_analyse.groupby(
+        by='parameterid_effektiv',
+    )[['stunden_vor_prozedur']].agg(['mean', 'count'])
+
+    # 5. Ergebnis berechnen und anzeigen
+    zeitverteilung_stats.columns = ['mittlere_stunden_vor_prozedur', 'anzahl']  # Spaltennamen vereinfachen
+    zeitverteilung_stats = zeitverteilung_stats.sort_values(by='anzahl', ascending=False)
+
+    parameter = zeitverteilung_stats.index.tolist()
     # Sortiere die Kategorien im DataFrame nach der Häufigkeit für einen sauberen Plot
-    df_labor['parameterid_effektiv'] = pd.Categorical(
-        df_labor['parameterid_effektiv'], categories=parameter, ordered=True
+    df_analyse['parameterid_effektiv'] = pd.Categorical(
+        df_analyse['parameterid_effektiv'], categories=parameter, ordered=True
     )
-    df_plot = df_labor.sort_values('parameterid_effektiv')
+    df_plot = df_analyse.sort_values('parameterid_effektiv')
 
     # Erstelle die Visualisierung
     plt.figure(figsize=(12, 32))  # Passe die Größe bei Bedarf an
@@ -104,6 +164,49 @@ def create_laborwerte_violinplot(df_labor, parameter):
     plt.savefig(output_filename)
     print(f"\nGrafik wurde erfolgreich als '{output_filename}' gespeichert.")
 
+def get_final_pivot_table(ddf):
+    # Beispiel: PIVOT-Tabelle erstellen für das Machine-Learning-Modell
+    # Wir wollen eine Tabelle, in der jede Zeile ein Fall ist und jede Spalte ein Laborparameter.
+    # Der Wert in der Zelle ist der letzte bekannte 'ergebniswert_num'.
+
+    # 1. Entferne unnötige Spalten, um den Pivot zu beschleunigen
+    ddf_pivot_input = ddf[['Fallnummer', 'prozedur_datetime', 'parameterid_effektiv', 'ergebniswert_num']]
+
+    # 2. Führe den Pivot durch
+    #   - index='Fallnummer': Jede Zeile ist ein einzigartiger Fall.
+    #   - columns='parameterid_effektiv': Jede Spalte ist ein einzigartiger Laborparameter.
+    #   - values='ergebniswert_num': Die Zellen enthalten den numerischen Ergebniswert.
+    df_final_features = ddf_pivot_input.pivot_table(
+        index='Fallnummer',
+        columns='parameterid_effektiv',
+        values='ergebniswert_num'
+    ).compute()
+
+    print("\nFeature-Tabelle mit den letzten Laborwerten (Ausschnitt):")
+    print(df_final_features.head())
+
+    return df_final_features
+
+    # Diese Tabelle 'df_final_features' ist jetzt bereit für das Training deines ML-Modells.
+    # Jede Zeile ist ein Sample (ein Fall) und jede Spalte ist ein Feature (ein Laborparameter).
+    # Die NaN-Werte bedeuten, dass für diesen Fall dieser Laborparameter nicht gemessen wurde.
+    # Diese Lücken musst du im nächsten Schritt mit einer Imputations-Strategie füllen (z.B. mit dem Mittelwert).
+
+def get_time_window_table(ddf):
+    # teile Minuten vor Prozedur durch 480, um das 8h-Zeitfenster zu berechnen
+    ddf['8h_zeitfenster'] = np.floor(ddf['minuten_vor_prozedur'] / 480)
+
+    ddf_zeitfenster_grouped = ddf[['parameterid_effektiv', '8h_zeitfenster']].groupby(
+        by=['parameterid_effektiv'],
+    )[['8h_zeitfenster']].size().compute()
+    ddf_zeitfenster_grouped.to_csv(
+        '2025-10-17_zeitreihe.csv',
+        index=False,
+    )
+    """ ERST PIVOT TABLE!!! """
+
+
+
 def main():
     # 1. Hole nur Prozeduren, die
     #   - einen eindeutig zugeordneten Befund haben und
@@ -116,33 +219,12 @@ def main():
         muss dann aber noch mittels Stammdaten auf stationäre Fälle gefiltert werden.
     """
 
-    # Laborwerte zu Prozeduren hinzufügen
-    ddf_analyse = add_laborwerte_to_prozeduren(df_prozeduren_final)
+    # Füge Laborwerte zu Prozeduren hinzu
+    ddf_prozeduren_mit_labor = add_laborwerte_to_prozeduren(df_prozeduren_final)
 
-    # 1. Berechne die neue Spalte 'stunden_vor_prozedur'
-    time_delta_seconds = (
-            ddf_analyse['prozedur_datetime'] - ddf_analyse['abnahmezeitpunkt_effektiv']
-    ).dt.total_seconds()
-    ddf_analyse['stunden_vor_prozedur'] = time_delta_seconds / 3600
+    ddf_filtered = get_latest_lab_values(ddf_prozeduren_mit_labor)
+    get_time_window_table(ddf_filtered)
 
-    # 2. Berechne Anzahl und Mittelwert für jeden Parameter
-    # zeitverteilung_stats = ddf_analyse.groupby('parameterid_effektiv').agg({
-    #     'stunden_vor_prozedur': ['mean', 'count']
-    # }).compute()
-
-    ddf_analyse_pd = ddf_analyse[
-        ['parameterid_effektiv', 'stunden_vor_prozedur']
-    ].copy().compute()
-    print(f"Anzahl der Laborparameter zu qualifizierten Prozeduren: {len(ddf_analyse_pd)}")
-    zeitverteilung_stats = ddf_analyse_pd.groupby(
-        by='parameterid_effektiv',
-    )[['stunden_vor_prozedur']].agg(['mean', 'count'])
-
-    # 5. Ergebnis berechnen und anzeigen
-    zeitverteilung_stats.columns = ['mittlere_stunden_vor_prozedur', 'anzahl']  # Spaltennamen vereinfachen
-    zeitverteilung_stats = zeitverteilung_stats.sort_values(by='anzahl', ascending=False)
-
-    parameter = zeitverteilung_stats.index.tolist()
 
 if __name__ == "__main__":
     main()
