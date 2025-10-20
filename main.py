@@ -2,7 +2,9 @@
 Dieses Script soll alle Prozessschritte der Datenbereinigung und -zusammenführung nacheinander
 ausführen, sodass am Ende nur dieses Script bedient werden muss.
 """
+import datetime
 import pandas as pd
+from dask import dataframe as dd
 import numpy as np
 from get_source_dfs import get_stammdaten_inpatients_df, get_prozeduren_df, get_befunde_df
 import matplotlib.pyplot as plt
@@ -10,9 +12,10 @@ import seaborn as sns
 
 from merge_data import add_laborwerte_to_prozeduren, merge_befunde_and_prozeduren
 
-LABOR_WINDOW_SIZE = 24 * 7 # Fenster der einzubeziehenden Laborwerte, in Stunden
+def get_now_label():
+    return datetime.datetime.now().strftime("%Y-%m-%d_%H:%M_")
 
-def get_labelled_prozeduren():
+def get_labelled_prozeduren(labor_window_hours):
     # 1. Daten importieren
     df_stammdaten_inpatients = get_stammdaten_inpatients_df()
     """
@@ -60,7 +63,7 @@ def get_labelled_prozeduren():
     )
     # 3.1 Neue Spalte für Beginn des Laborzeitfensters definieren
     df_prozeduren_final['prozedur_fenster_start'] = pd.to_datetime(
-        df_prozeduren_final['prozedur_datetime'] - pd.Timedelta(hours=LABOR_WINDOW_SIZE),
+        df_prozeduren_final['prozedur_datetime'] - pd.Timedelta(hours=labor_window_hours),
     )
     # 3.2 Alter für alle fehlenden Fälle berechnen, als Diff zwischen GebDatum und prozedur_datetime
     alter_aus_gebdatum = df_prozeduren_final['alter'].fillna(
@@ -71,9 +74,10 @@ def get_labelled_prozeduren():
         alter_aus_gebdatum_float.round().astype(int)
     )
     df_prozeduren_final['altersdekade_bei_prozedur'] = np.ceil(df_stammdaten_inpatients['alter'] / 10)
+    # 3.3 Entferne Prozeduren mit Alter < 18 Jahren
+    df_prozeduren_no_minors = df_prozeduren_final.query("alter >= 18").copy()
 
-    print(df_prozeduren_final['alter'].isnull().sum())
-    df_prozeduren_final_filtered = df_prozeduren_final[
+    df_prozeduren_final_filtered = df_prozeduren_no_minors[
         [
             'Fallnummer',
             'prozedur_datetime',
@@ -84,7 +88,7 @@ def get_labelled_prozeduren():
         ]
     ]
 
-    return df_prozeduren_final
+    return df_prozeduren_final_filtered
 
 def get_latest_lab_values(ddf):
     """
@@ -162,6 +166,7 @@ def create_laborwerte_violinplot(ddf_labor):
     # Speichere die Grafik als Datei
     output_filename = "laborparameter_verteilung_violinplot.png"
     plt.savefig(output_filename)
+    plt.close()
     print(f"\nGrafik wurde erfolgreich als '{output_filename}' gespeichert.")
 
 def get_final_pivot_table(ddf):
@@ -192,26 +197,77 @@ def get_final_pivot_table(ddf):
     # Die NaN-Werte bedeuten, dass für diesen Fall dieser Laborparameter nicht gemessen wurde.
     # Diese Lücken musst du im nächsten Schritt mit einer Imputations-Strategie füllen (z.B. mit dem Mittelwert).
 
-def get_time_window_table(ddf):
+def get_time_window_table(ddf, num_hours_per_window):
+    num_mins_per_window = num_hours_per_window * 60
+    num_windows = round(168 / num_hours_per_window)
     # teile Minuten vor Prozedur durch 480, um das 8h-Zeitfenster zu berechnen
-    ddf['8h_zeitfenster'] = np.floor(ddf['minuten_vor_prozedur'] / 480)
+    ddf['zeitfenster'] = (np.floor(ddf['minuten_vor_prozedur'] / num_mins_per_window)).astype(int)
+    ddf_filtered = ddf[ddf['zeitfenster'] < num_windows]
 
-    ddf_zeitfenster_grouped = ddf[['parameterid_effektiv', '8h_zeitfenster']].groupby(
-        by=['parameterid_effektiv'],
-    )[['8h_zeitfenster']].size().compute()
-    ddf_zeitfenster_grouped.to_csv(
-        '2025-10-17_zeitreihe.csv',
-        index=False,
+    ddf_zeitfenster_grouped = ddf_filtered[['parameterid_effektiv', 'zeitfenster']].groupby(
+        by=['parameterid_effektiv', 'zeitfenster']
+    ).size().reset_index().compute()
+    ddf_zeitfenster_grouped.columns = ['parameterid_effektiv', 'zeitfenster', 'zeitfenster_size']
+    ddf_zeitfenster_pivot = ddf_zeitfenster_grouped.pivot(
+        index='parameterid_effektiv',
+        columns='zeitfenster',
+        values='zeitfenster_size'
+    ).fillna(0)
+    ddf_zeitfenster_pivot = ddf_zeitfenster_pivot.astype(int)
+
+    return ddf_zeitfenster_pivot
+
+def create_time_window_heatmap(pivot_df, num_hours_per_window):
+    plt.figure(figsize=(20, 30))  # Passe die Größe bei Bedarf an
+    sns.heatmap(
+        pivot_df,
+        annot=True,
+        linewidth=.5,
+        cmap='crest',
+        fmt='d',
+        annot_kws={'fontsize': 10},
     )
+
+    zeitfenster_labels = [f'{i * num_hours_per_window}-{(i + 1) * num_hours_per_window}h' for i in pivot_df.columns]
+    plt.xticks(ticks=np.arange(len(zeitfenster_labels)) + 0.5, labels=zeitfenster_labels, rotation=45, ha='right')
+    plt.title('Zeitliche Verteilung der Laborparameter vor der Prozedur', fontsize=16)
+    plt.xlabel(f'{num_hours_per_window}h-Fenster vor der Prozedur', fontsize=12)
+    plt.ylabel('Laborparameter', fontsize=12)
+    plt.tight_layout()  # Stellt sicher, dass alles gut lesbar ist
+
+    output_filename = get_now_label() + "time_window_verteilung_grouped.png"
+    plt.savefig(output_filename)
+    plt.close()
+    print(f"\nGrafik wurde erfolgreich als '{output_filename}' gespeichert.")
+
+def get_time_window_table_pandas(df):
+    # teile Minuten vor Prozedur durch 480, um das 8h-Zeitfenster zu berechnen
+    df['8h_zeitfenster'] = np.floor(df['minuten_vor_prozedur'] / 480)
+
+    df_zeitfenster_grouped = df[['parameterid_effektiv', '8h_zeitfenster']].groupby(
+        by=['parameterid_effektiv']
+    )[['8h_zeitfenster']].size().reset_index()
+    df_zeitfenster_grouped.columns = ['parameterid_effektiv', '8h_zeitfenster_size']
+    print(df_zeitfenster_grouped.dtypes)
+    print(df_zeitfenster_grouped.head())
+    df_zeitfenster_pivot = df_zeitfenster_grouped.pivot_table(
+        index='parameterid_effektiv',
+        columns='8h_zeitfenster',
+        values='size'
+    )
+    print(df_zeitfenster_pivot.head())
+
+    # ddf_zeitfenster_grouped.to_csv(
+    #     '2025-10-17_zeitreihe.csv',
+    #     index=False,
+    # )
     """ ERST PIVOT TABLE!!! """
-
-
 
 def main():
     # 1. Hole nur Prozeduren, die
     #   - einen eindeutig zugeordneten Befund haben und
     #   - zu stationären Fällen gehören.
-    df_prozeduren_final = get_labelled_prozeduren()
+    # df_prozeduren_final = get_labelled_prozeduren()
     """
     ACHTUNG!
     - Der Befundeimport muss so geändert werden, dass die gelabelten Befunde geladen werden!
@@ -220,10 +276,28 @@ def main():
     """
 
     # Füge Laborwerte zu Prozeduren hinzu
-    ddf_prozeduren_mit_labor = add_laborwerte_to_prozeduren(df_prozeduren_final)
+    # ddf_prozeduren_mit_labor = add_laborwerte_to_prozeduren(df_prozeduren_final)
 
-    ddf_filtered = get_latest_lab_values(ddf_prozeduren_mit_labor)
-    get_time_window_table(ddf_filtered)
+    # ddf_filtered = get_latest_lab_values(ddf_prozeduren_mit_labor)
+    # get_time_window_table(ddf_filtered)
+    ddf = dd.read_csv('2025-10-19_laborwerte_filtered.csv')
+    ddf_dedup_cases = ddf.drop_duplicates(subset=['Fallnummer', 'prozedur_datetime']).copy()
+    num_cases = len(ddf_dedup_cases)
+    print(num_cases)
+    zeitfenster_pivot = get_time_window_table(ddf, 8)
+    zeitfenster_pivot = zeitfenster_pivot.reset_index(drop=True).rename_axis(None, axis=1)
+    zeitfenster_pivot['anzahl_einträge'] = zeitfenster_pivot['parameterid_effektiv'].apply(
+        lambda param: len(ddf[ddf['parameterid_effektiv'] == param])
+    )
+    zeitfenster_pivot['abdeckung'] = np.round((zeitfenster_pivot['anzahl_einträge'] * 100 / num_cases), 1)
+    zeitfenster_labels = ['parameterid_effektiv']
+    zeitfenster_labels.extend([f'{i * 8}-{(i + 1) * 8}h' for i in range(21)])
+    zeitfenster_labels.extend(['anzahl_einträge', 'abdeckung'])
+    zeitfenster_pivot.columns = zeitfenster_labels
+    # print(zeitfenster_pivot.dtypes)
+    zeitfenster_pivot.to_csv(
+        get_now_label() + "laborwerte_pro_zeitfenster_mit_abdeckung.csv",
+    )
 
 
 if __name__ == "__main__":

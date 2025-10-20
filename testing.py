@@ -1,34 +1,18 @@
-from main import get_labelled_prozeduren
+from main import get_labelled_prozeduren, get_latest_lab_values, get_time_window_table, get_now_label
 from merge_data import add_laborwerte_to_prozeduren
 import datetime
 
 print(datetime.datetime.now().strftime("%H:%M:%S") + " - Let's go!")
-df_prozeduren_final = get_labelled_prozeduren()
+df_prozeduren_final = get_labelled_prozeduren(24 * 7)
 
-# Laborwerte zu Prozeduren hinzufügen
-ddf_analyse = add_laborwerte_to_prozeduren(df_prozeduren_final)
-ddf_analyse['geburtsjahr'] = ddf_analyse['geburtsdatum'].dt.year
+# Füge Laborwerte zu Prozeduren hinzu
+ddf_prozeduren_mit_labor = add_laborwerte_to_prozeduren(df_prozeduren_final)
+ddf_filtered = get_latest_lab_values(ddf_prozeduren_mit_labor)
+zeitfenster_pivot = get_time_window_table(ddf_filtered, 8)
+zeitfenster_pivot = zeitfenster_pivot.reset_index().rename_axis(None, axis=1)
 
-ddf_analyse_pd = ddf_analyse[[
-    'Fallnummer',
-    'parameterbezeichnung_effektiv',
-    'parameterid_effektiv',
-    'geburtsdatum',
-    'alter_bei_prozedur',
-    'altersdekade_bei_prozedur',
-    'geschlecht'
-]].copy().compute()
-
-ddf_grouped = ddf_analyse_pd.groupby(
-    by=[
-        'parameterbezeichnung_effektiv',
-        'parameterid_effektiv',
-        'altersdekade_bei_prozedur',
-        'geschlecht'
-    ],
-    as_index=False,
-).size()
-# ddf_grouped.to_csv(
-#     'Analyse Laborwerttabelle/2025-10-17_analyse_dekade_geschlecht_2.csv',
-#     index=False,
-# )
+zeitfenster_pivot.to_csv(
+    get_now_label() + 'laborwerte_zeitfenster.csv',
+    # single_file=True,
+    index=False
+)
