@@ -60,10 +60,15 @@ def add_laborwerte_to_prozeduren(df_prozeduren_final):
         ddf_prozeduren,
         ddf_labor,
         on=['Fallnummer'],
-        how='left',
+        how='inner',
     ).reset_index(drop=True)
+    ddf_merged_dedup_proz = ddf_merged.drop_duplicates(subset=['Fallnummer', 'prozedur_datetime']).copy()
     query_str = 'prozedur_fenster_start <= abnahmezeitpunkt_effektiv <= prozedur_datetime'
     ddf_labor_filtered = ddf_merged.query(query_str)
+    print(f"\nVon den {len(df_prozeduren_final)} Prozeduren ist zu {len(ddf_merged_dedup_proz)} von ihnen "
+          f"mindestens ein Laborwert vorhanden.")
+    ddf_labor_filtered_dedup = ddf_labor_filtered.drop_duplicates(subset=['Fallnummer', 'prozedur_datetime']).copy()
+    print(f"Davon haben {len(ddf_labor_filtered_dedup)} Prozeduren mind. einen Laborwert im definierten Laborfenster.")
 
     return ddf_labor_filtered
 

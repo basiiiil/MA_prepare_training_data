@@ -48,7 +48,7 @@ def get_stammdaten_inpatients_df():
     df_source['behandlungsart'] = df_source['Bewegung Behandlungsart']
     df_source['geschlecht'] = df_source['Geschlecht']
     # df_source['geburtsdatum'] = np.nan
-    df_source['alter'] = df_source['Alter']
+    df_source['alter_bei_prozedur'] = df_source['Alter']
 
     df_source_nachgereicht['Fallnummer'] = df_source_nachgereicht['Fall']
     # df_source_nachgereicht['Patientennummer'] = df_source_nachgereicht['Patient']
@@ -57,7 +57,7 @@ def get_stammdaten_inpatients_df():
     df_source_nachgereicht['geburtsdatum'] = pd.to_datetime(
         df_source_nachgereicht['GebDatum'], format='%Y-%m-%d'
     )
-    # df_source_nachgereicht['alter'] = np.nan
+    # df_source_nachgereicht['alter_bei_prozedur'] = np.nan
 
     # 3. Merge all Fallnummern and drop duplicates
     df_stammdaten_all = pd.concat(
@@ -67,7 +67,7 @@ def get_stammdaten_inpatients_df():
                     'Fallnummer',
                     'geschlecht',
                     # 'geburtsdatum',
-                    'alter',
+                    'alter_bei_prozedur',
                     'behandlungsart'
                 ]
             ],
@@ -76,7 +76,7 @@ def get_stammdaten_inpatients_df():
                     'Fallnummer',
                     'geschlecht',
                     'geburtsdatum',
-                    # 'alter',
+                    # 'alter_bei_prozedur',
                     'behandlungsart'
                 ]
             ],
@@ -87,7 +87,7 @@ def get_stammdaten_inpatients_df():
     #         'Fallnummer',
     #         'geschlecht',
     #         # 'geburtsdatum',
-    #         'alter',
+    #         'alter_bei_prozedur',
     #         'behandlungsart'
     #     ]
     # ]
@@ -95,6 +95,7 @@ def get_stammdaten_inpatients_df():
         df_stammdaten_all['behandlungsart'] == 'Stationär'
     ].reset_index(drop=True)
     df_stammdaten_dedup = df_stammdaten_all_inpatients.drop_duplicates().copy()
+    print(f"Es existieren Stammdaten zu {len(df_stammdaten_dedup)} stationären Fällen.")
 
     return df_stammdaten_dedup
 

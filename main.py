@@ -15,7 +15,7 @@ from merge_data import add_laborwerte_to_prozeduren, merge_befunde_and_prozedure
 def get_now_label():
     return datetime.datetime.now().strftime("%Y-%m-%d_%H:%M_")
 
-def get_labelled_prozeduren(labor_window_hours):
+def get_labelled_prozeduren(labor_window_in_hours):
     # 1. Daten importieren
     df_stammdaten_inpatients = get_stammdaten_inpatients_df()
     """
@@ -50,10 +50,10 @@ def get_labelled_prozeduren(labor_window_hours):
         'prozedur_zeit',
         'geschlecht',
         'geburtsdatum',
-        'alter',
+        'alter_bei_prozedur',
         # 'lae_kategorie'
     ]].copy()
-    print(f"Von {len(df_befunde)} Befunden stationärer Fälle "
+    print(f"Von {len(df_prozeduren_inpatients)} Prozeduren stationärer Fälle "
           f"wurden {len(df_prozeduren_final)} in den Stammdaten gefunden.")
 
     # 3. Datums- und Zeitspalten in datetime Objekte umwandeln
@@ -63,32 +63,37 @@ def get_labelled_prozeduren(labor_window_hours):
     )
     # 3.1 Neue Spalte für Beginn des Laborzeitfensters definieren
     df_prozeduren_final['prozedur_fenster_start'] = pd.to_datetime(
-        df_prozeduren_final['prozedur_datetime'] - pd.Timedelta(hours=labor_window_hours),
+        df_prozeduren_final['prozedur_datetime'] - pd.Timedelta(hours=labor_window_in_hours),
     )
     # 3.2 Alter für alle fehlenden Fälle berechnen, als Diff zwischen GebDatum und prozedur_datetime
-    alter_aus_gebdatum = df_prozeduren_final['alter'].fillna(
+    alter_aus_gebdatum = df_prozeduren_final['alter_bei_prozedur'].fillna(
         (df_prozeduren_final['prozedur_datetime'] - df_prozeduren_final['geburtsdatum']).dt.days
     )
     alter_aus_gebdatum_float = alter_aus_gebdatum / 365.25
-    df_prozeduren_final['alter'] = df_prozeduren_final['alter'].fillna(
+    df_prozeduren_final['alter_bei_prozedur'] = df_prozeduren_final['alter_bei_prozedur'].fillna(
         alter_aus_gebdatum_float.round().astype(int)
     )
-    df_prozeduren_final['altersdekade_bei_prozedur'] = np.ceil(df_stammdaten_inpatients['alter'] / 10)
+    df_prozeduren_final['altersdekade_bei_prozedur'] = np.ceil(df_stammdaten_inpatients['alter_bei_prozedur'] / 10)
     # 3.3 Entferne Prozeduren mit Alter < 18 Jahren
-    df_prozeduren_no_minors = df_prozeduren_final.query("alter >= 18").copy()
+    df_prozeduren_no_minors = df_prozeduren_final.query("alter_bei_prozedur >= 18").copy()
+    print(f"Davon sind {len(df_prozeduren_no_minors)} mit alter_bei_prozedur >= 18.\n")
 
     df_prozeduren_final_filtered = df_prozeduren_no_minors[
         [
             'Fallnummer',
             'prozedur_datetime',
             'prozedur_fenster_start',
-            'alter',
+            'alter_bei_prozedur',
             'geschlecht',
             'altersdekade_bei_prozedur'
         ]
     ]
 
     return df_prozeduren_final_filtered
+
+def add_lab_values_to_prozeduren(df_prozeduren):
+    ddf_prozeduren_with_lab_values = add_laborwerte_to_prozeduren(df_prozeduren)
+    return ddf_prozeduren_with_lab_values
 
 def get_latest_lab_values(ddf):
     """
@@ -170,12 +175,23 @@ def create_laborwerte_violinplot(ddf_labor):
     print(f"\nGrafik wurde erfolgreich als '{output_filename}' gespeichert.")
 
 def get_final_pivot_table(ddf):
-    # Beispiel: PIVOT-Tabelle erstellen für das Machine-Learning-Modell
-    # Wir wollen eine Tabelle, in der jede Zeile ein Fall ist und jede Spalte ein Laborparameter.
+    # Wir wollen eine Tabelle, in der jede Zeile eine Prozedur ist (identifiziert durch 'Fallnummer' und
+    # 'prozedur_datetime') und jede Spalte ein Laborparameter.
     # Der Wert in der Zelle ist der letzte bekannte 'ergebniswert_num'.
+    # Zusätzliche Spalten sind 'alter_bei_prozedur', 'geschlecht' und 'lae_kategorie'.
 
     # 1. Entferne unnötige Spalten, um den Pivot zu beschleunigen
-    ddf_pivot_input = ddf[['Fallnummer', 'prozedur_datetime', 'parameterid_effektiv', 'ergebniswert_num']]
+    ddf_pivot_input = ddf[
+        [
+            'Fallnummer',
+            'prozedur_datetime',
+            'alter_bei_prozedur',
+            'geschlecht',
+            'parameterid_effektiv',
+            'ergebniswert_num',
+            # 'minuten_vor_prozedur',
+        ]
+    ]
 
     # 2. Führe den Pivot durch
     #   - index='Fallnummer': Jede Zeile ist ein einzigartiger Fall.
@@ -214,6 +230,7 @@ def get_time_window_table(ddf, num_hours_per_window):
         values='zeitfenster_size'
     ).fillna(0)
     ddf_zeitfenster_pivot = ddf_zeitfenster_pivot.astype(int)
+
 
     return ddf_zeitfenster_pivot
 
@@ -264,40 +281,55 @@ def get_time_window_table_pandas(df):
     """ ERST PIVOT TABLE!!! """
 
 def main():
-    # 1. Hole nur Prozeduren, die
-    #   - einen eindeutig zugeordneten Befund haben und
-    #   - zu stationären Fällen gehören.
-    # df_prozeduren_final = get_labelled_prozeduren()
-    """
-    ACHTUNG!
-    - Der Befundeimport muss so geändert werden, dass die gelabelten Befunde geladen werden!
-    - Um die zu labelnden Befunde zu erhalten, kann get_befunde_df() genutzt werden,
-        muss dann aber noch mittels Stammdaten auf stationäre Fälle gefiltert werden.
-    """
+    # 1. Hole Prozeduren, mit Zeitfenster gesamt = 7 Tage * 24h = 168h
+    df_prozeduren = get_labelled_prozeduren(168)
+    """ ACHTUNG! Der Befundeimport muss so geändert werden, dass die gelabelten Befunde geladen werden! """
 
-    # Füge Laborwerte zu Prozeduren hinzu
-    # ddf_prozeduren_mit_labor = add_laborwerte_to_prozeduren(df_prozeduren_final)
+    # 2. Füge den Prozeduren anhand Fallnummer und prozedur_datetime die Laborwerte hinzu
+    ddf_proz_with_lab = add_lab_values_to_prozeduren(df_prozeduren)
 
-    # ddf_filtered = get_latest_lab_values(ddf_prozeduren_mit_labor)
-    # get_time_window_table(ddf_filtered)
-    ddf = dd.read_csv('2025-10-19_laborwerte_filtered.csv')
-    ddf_dedup_cases = ddf.drop_duplicates(subset=['Fallnummer', 'prozedur_datetime']).copy()
-    num_cases = len(ddf_dedup_cases)
-    print(num_cases)
-    zeitfenster_pivot = get_time_window_table(ddf, 8)
-    zeitfenster_pivot = zeitfenster_pivot.reset_index(drop=True).rename_axis(None, axis=1)
-    zeitfenster_pivot['anzahl_einträge'] = zeitfenster_pivot['parameterid_effektiv'].apply(
-        lambda param: len(ddf[ddf['parameterid_effektiv'] == param])
-    )
-    zeitfenster_pivot['abdeckung'] = np.round((zeitfenster_pivot['anzahl_einträge'] * 100 / num_cases), 1)
-    zeitfenster_labels = ['parameterid_effektiv']
-    zeitfenster_labels.extend([f'{i * 8}-{(i + 1) * 8}h' for i in range(21)])
-    zeitfenster_labels.extend(['anzahl_einträge', 'abdeckung'])
-    zeitfenster_pivot.columns = zeitfenster_labels
-    # print(zeitfenster_pivot.dtypes)
-    zeitfenster_pivot.to_csv(
-        get_now_label() + "laborwerte_pro_zeitfenster_mit_abdeckung.csv",
-    )
+    # 3. Filtere die Tabelle auf den letzten Ergebniswert je Prozedur und Laborparameter
+    ddf_proz_with_lab_latest = get_latest_lab_values(ddf_proz_with_lab)
+    ddf_proz_with_lab_latest_small = ddf_proz_with_lab_latest[
+        [
+            'Fallnummer',
+            'prozedur_datetime',
+            'alter_bei_prozedur',
+            'geschlecht',
+            'parameterid_effektiv',
+            'ergebniswert_num',
+            'minuten_vor_prozedur',
+        ]
+    ]
+
+    # 4. Erstelle Pivottabelle mit Laborwerten als Spalten
+    ddf_final_pivot = get_final_pivot_table(ddf_proz_with_lab_latest_small)
+
+    # ddf_proz_with_lab_latest_small.to_csv(
+    #     get_now_label() + 'prozeduren_with_latest_lab_values.csv',
+    #     single_file=True,
+    #     index=False,
+    # )
+
+
+
+    # ddf = dd.read_csv('2025-10-19_laborwerte_filtered.csv')
+    # ddf_dedup_cases = ddf.drop_duplicates(subset=['Fallnummer', 'prozedur_datetime']).copy()
+    # num_cases = len(ddf_dedup_cases)
+    # print(num_cases)
+    # zeitfenster_pivot = get_time_window_table(ddf, 8)
+    # zeitfenster_pivot = zeitfenster_pivot.reset_index(drop=True).rename_axis(None, axis=1)
+    # zeitfenster_pivot['anzahl_einträge'] = zeitfenster_pivot['parameterid_effektiv'].apply(
+    #     lambda param: len(ddf[ddf['parameterid_effektiv'] == param])
+    # )
+    # zeitfenster_pivot['abdeckung'] = np.round((zeitfenster_pivot['anzahl_einträge'] * 100 / num_cases), 1)
+    # zeitfenster_labels = ['parameterid_effektiv']
+    # zeitfenster_labels.extend([f'{i * 8}-{(i + 1) * 8}h' for i in range(21)])
+    # zeitfenster_labels.extend(['anzahl_einträge', 'abdeckung'])
+    # zeitfenster_pivot.columns = zeitfenster_labels
+    # zeitfenster_pivot.to_csv(
+    #     get_now_label() + "laborwerte_pro_zeitfenster_mit_abdeckung.csv",
+    # )
 
 
 if __name__ == "__main__":
