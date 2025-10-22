@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from dask import dataframe as dd
-from get_source_dfs import get_labor_ddf, get_labor_df_pandas
+from get_source_dfs import get_labor_ddf
 
 '''
 Zuletzt bearbeitet am 15.10.
@@ -61,32 +61,6 @@ def add_laborwerte_to_prozeduren(df_prozeduren_final):
         ddf_labor,
         on=['Fallnummer'],
         how='inner',
-    ).reset_index(drop=True)
-    ddf_merged_dedup_proz = ddf_merged.drop_duplicates(subset=['Fallnummer', 'prozedur_datetime']).copy()
-    query_str = 'prozedur_fenster_start <= abnahmezeitpunkt_effektiv <= prozedur_datetime'
-    ddf_labor_filtered = ddf_merged.query(query_str)
-    print(f"\nVon den {len(df_prozeduren_final)} Prozeduren ist zu {len(ddf_merged_dedup_proz)} von ihnen "
-          f"mindestens ein Laborwert vorhanden.")
-    ddf_labor_filtered_dedup = ddf_labor_filtered.drop_duplicates(subset=['Fallnummer', 'prozedur_datetime']).copy()
-    print(f"Davon haben {len(ddf_labor_filtered_dedup)} Prozeduren mind. einen Laborwert im definierten Laborfenster.")
-
-    return ddf_labor_filtered
-
-def add_laborwerte_to_prozeduren_pandas(df_prozeduren_final):
-    df_labor = get_labor_df_pandas()
-
-    # 1. Merge Labordaten auf die Prozeduren.
-    #   Dabei fliegen alle Labordaten raus, deren Fallnummer nicht in der Prozedurentabelle vorkommt.
-    #   Laborwerte werden immer dann zugewiesen, wenn ihr 'abnahmezeitpunkt_effektiv' innerhalb des
-    #   Fensters liegt (also nach 'prozedur_fenster_start', aber vor 'prozedur_datetime'.
-    #   Pro Prozedur wird es dadurch für jeden Laborwert eine Zeile geben.
-    df_labor['Fallnummer'] = df_labor['Fallnummer'].astype('int64')
-    df_prozeduren_final['Fallnummer'] = df_prozeduren_final['Fallnummer'].astype('int64')
-    ddf_merged = dd.merge(
-        df_prozeduren_final,
-        df_labor,
-        on=['Fallnummer'],
-        how='left',
     ).reset_index(drop=True)
     query_str = 'prozedur_fenster_start <= abnahmezeitpunkt_effektiv <= prozedur_datetime'
     ddf_labor_filtered = ddf_merged.query(query_str)

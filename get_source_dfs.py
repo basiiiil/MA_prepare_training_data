@@ -1,10 +1,9 @@
 import numpy as np
 import pandas as pd
+import datetime
 
-from functions_labor import filter_for_relevant_rows, normalize_ids_and_timestamps, filter_for_relevant_rows_pandas, \
-    normalize_ids_and_timestamps_pandas
+from functions_labor import filter_for_relevant_rows, normalize_ids_and_timestamps, get_complete_laborwerte_ddf
 from functions_befunde import dedup_befunde, get_unique_befunde_per_case_day, get_befunde_from_files
-from util_functions import get_complete_laborwerte_ddf, get_complete_laborwerte_df_pandas
 
 
 def get_stammdaten_inpatients_df():
@@ -185,9 +184,26 @@ def get_labor_ddf():
 
     return ddf_labor_normalized
 
-def get_labor_df_pandas():
-    df_labor = get_complete_laborwerte_df_pandas()
-    df_labor_filtered = filter_for_relevant_rows_pandas(df_labor)
-    ddf_labor_normalized = normalize_ids_and_timestamps_pandas(df_labor_filtered)
+def get_diagnosen_df():
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Lese Diagnosen...")
+    df_diagnosen = pd.read_csv(
+        'fromDIZ/Diagnosen/25.07.2025_Diagnosen_sf.csv'
+    )
+    df_diagnosen['Fallnummer'] = df_diagnosen['Fall'].astype(int)
+    df_diagnosen['diagnose_datetime'] = df_diagnosen['DiagDatum'] + "_" + df_diagnosen['Zeit']
+    df_diagnosen['diagnose_datetime'] = pd.to_datetime(
+        df_diagnosen['diagnose_datetime'], format='%m/%d/%Y_%I:%M:%S %p'
+    )
 
-    return ddf_labor_normalized
+    df_diagnosen_filtered = df_diagnosen[
+        [
+            'Fallnummer',
+            'Diagnoseschlüssel',
+            'diagnose_datetime',
+        ]
+    ]
+    df_diagnosen_dedup = df_diagnosen_filtered.drop_duplicates().copy()
+    num_cases = df_diagnosen_dedup['Fallnummer'].nunique()
+    print(f"{len(df_diagnosen_dedup)} Diagnosen zu {num_cases} Fallnummern gefunden.\n")
+
+    return df_diagnosen_dedup

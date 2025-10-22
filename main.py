@@ -214,13 +214,11 @@ def get_final_pivot_table(ddf):
     # Diese Lücken musst du im nächsten Schritt mit einer Imputations-Strategie füllen (z.B. mit dem Mittelwert).
 
 def get_time_window_table(ddf, num_hours_per_window):
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Erstelle Zeitfenstertabelle...")
     num_mins_per_window = num_hours_per_window * 60
-    num_windows = round(168 / num_hours_per_window)
-    # teile Minuten vor Prozedur durch 480, um das 8h-Zeitfenster zu berechnen
     ddf['zeitfenster'] = (np.floor(ddf['minuten_vor_prozedur'] / num_mins_per_window)).astype(int)
-    ddf_filtered = ddf[ddf['zeitfenster'] < num_windows]
 
-    ddf_zeitfenster_grouped = ddf_filtered[['parameterid_effektiv', 'zeitfenster']].groupby(
+    ddf_zeitfenster_grouped = ddf[['parameterid_effektiv', 'zeitfenster']].groupby(
         by=['parameterid_effektiv', 'zeitfenster']
     ).size().reset_index().compute()
     ddf_zeitfenster_grouped.columns = ['parameterid_effektiv', 'zeitfenster', 'zeitfenster_size']
@@ -231,6 +229,13 @@ def get_time_window_table(ddf, num_hours_per_window):
     ).fillna(0)
     ddf_zeitfenster_pivot = ddf_zeitfenster_pivot.astype(int)
 
+    name_last_column = ddf_zeitfenster_pivot.columns[-1]
+    ddf_prozeduren_dedup = ddf.drop_duplicates(subset=['Fallnummer', 'prozedur_datetime']).copy()
+    num_prozeduren = len(ddf_prozeduren_dedup)
+    print(f"Anzahl eindeutiger Prozeduren: {num_prozeduren}")
+    ddf_zeitfenster_pivot['abdeckung'] = ddf_zeitfenster_pivot[0].apply(
+        lambda x: round(x * 100 / num_prozeduren, 1)
+    )
 
     return ddf_zeitfenster_pivot
 
@@ -257,30 +262,8 @@ def create_time_window_heatmap(pivot_df, num_hours_per_window):
     plt.close()
     print(f"\nGrafik wurde erfolgreich als '{output_filename}' gespeichert.")
 
-def get_time_window_table_pandas(df):
-    # teile Minuten vor Prozedur durch 480, um das 8h-Zeitfenster zu berechnen
-    df['8h_zeitfenster'] = np.floor(df['minuten_vor_prozedur'] / 480)
-
-    df_zeitfenster_grouped = df[['parameterid_effektiv', '8h_zeitfenster']].groupby(
-        by=['parameterid_effektiv']
-    )[['8h_zeitfenster']].size().reset_index()
-    df_zeitfenster_grouped.columns = ['parameterid_effektiv', '8h_zeitfenster_size']
-    print(df_zeitfenster_grouped.dtypes)
-    print(df_zeitfenster_grouped.head())
-    df_zeitfenster_pivot = df_zeitfenster_grouped.pivot_table(
-        index='parameterid_effektiv',
-        columns='8h_zeitfenster',
-        values='size'
-    )
-    print(df_zeitfenster_pivot.head())
-
-    # ddf_zeitfenster_grouped.to_csv(
-    #     '2025-10-17_zeitreihe.csv',
-    #     index=False,
-    # )
-    """ ERST PIVOT TABLE!!! """
-
 def main():
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Let's go!")
     # 1. Hole Prozeduren, mit Zeitfenster gesamt = 7 Tage * 24h = 168h
     df_prozeduren = get_labelled_prozeduren(168)
     """ ACHTUNG! Der Befundeimport muss so geändert werden, dass die gelabelten Befunde geladen werden! """
@@ -303,7 +286,16 @@ def main():
     ]
 
     # 4. Erstelle Pivottabelle mit Laborwerten als Spalten
-    ddf_final_pivot = get_final_pivot_table(ddf_proz_with_lab_latest_small)
+    # ddf_final_pivot = get_final_pivot_table(ddf_proz_with_lab_latest_small)
+
+    ddf_proz_with_lab_latest_until_2019 = ddf_proz_with_lab_latest[
+        ddf_proz_with_lab_latest['prozedur_datetime'].dt.year <= 2019
+    ]
+    twt = get_time_window_table(ddf_proz_with_lab_latest_until_2019, 24)
+    twt.to_csv('twt_bis_2019_2.csv')
+
+
+
 
     # ddf_proz_with_lab_latest_small.to_csv(
     #     get_now_label() + 'prozeduren_with_latest_lab_values.csv',
