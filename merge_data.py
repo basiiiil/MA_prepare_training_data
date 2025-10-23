@@ -45,9 +45,9 @@ def merge_befunde_and_prozeduren(df_befunde, df_prozeduren):
         print("\nFür jeden Falltag existiert genau 1 Befund.")
         return df_befunde_proz_merged
 
-def add_laborwerte_to_prozeduren(df_prozeduren_final):
+def add_laborwerte_to_prozeduren(df_prozeduren):
     ddf_labor = get_labor_ddf()
-    ddf_prozeduren = dd.from_pandas(df_prozeduren_final, npartitions=1)
+    ddf_prozeduren = dd.from_pandas(df_prozeduren)
 
     # 1. Merge Labordaten auf die Prozeduren.
     #   Dabei fliegen alle Labordaten raus, deren Fallnummer nicht in der Prozedurentabelle vorkommt.
@@ -62,6 +62,8 @@ def add_laborwerte_to_prozeduren(df_prozeduren_final):
         on=['Fallnummer'],
         how='inner',
     ).reset_index(drop=True)
+
+    # Filtere auf Laborwerte, die innerhalb des Laborfensters liegen
     query_str = 'prozedur_fenster_start <= abnahmezeitpunkt_effektiv <= prozedur_datetime'
     ddf_labor_filtered = ddf_merged.query(query_str)
 

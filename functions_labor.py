@@ -42,6 +42,7 @@ dtype_lib_befunde = {
     'start_time': 'string',
 }
 
+
 def get_complete_laborwerte_ddf():
     dtype_lib = {
         # 'Auftragsnummer': np.int_,
@@ -304,17 +305,9 @@ def normalize_ids_and_timestamps_pandas(df):
 
     return df
 
-def main():
+def get_labor_ddf():
     ddf_labor = get_complete_laborwerte_ddf()
-
     ddf_labor_filtered = filter_for_relevant_rows(ddf_labor)
     ddf_labor_normalized = normalize_ids_and_timestamps(ddf_labor_filtered)
 
-    ddf_labor_normalized.head(10000).to_csv(
-        'Outputs/2025-10-15_laborwerte_normalized.csv',
-        # single_file=True,
-        index=False,
-    )
-
-if __name__ == '__main__':
-    main()
+    return ddf_labor_normalized

@@ -10,7 +10,7 @@ from get_source_dfs import get_stammdaten_inpatients_df, get_prozeduren_df, get_
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from merge_data import add_laborwerte_to_prozeduren, merge_befunde_and_prozeduren
+from merge_data import merge_befunde_and_prozeduren
 
 def get_now_label():
     return datetime.datetime.now().strftime("%Y-%m-%d_%H:%M_")
@@ -21,8 +21,6 @@ def get_labelled_prozeduren(labor_window_in_hours):
     """
     ACHTUNG!
     - Der Befundeimport muss so geändert werden, dass die gelabelten Befunde geladen werden!
-    - Um die zu labelnden Befunde zu erhalten, kann get_befunde_df() genutzt werden,
-        muss dann aber noch mittels Stammdaten auf stationäre Fälle gefiltert werden.
     """
     df_befunde = get_befunde_df()
     df_prozeduren = get_prozeduren_df()
@@ -43,44 +41,36 @@ def get_labelled_prozeduren(labor_window_in_hours):
         on=['Fallnummer'],
         how='inner',
     )
-    # 2.3 Überflüssige Spalten verwerfen
-    df_prozeduren_final = df_prozeduren_inpatients[[
-        'Fallnummer',
-        'prozedur_datum',
-        'prozedur_zeit',
-        'geschlecht',
-        'geburtsdatum',
-        'alter_bei_prozedur',
-        # 'lae_kategorie'
-    ]].copy()
-    print(f"Von {len(df_prozeduren_inpatients)} Prozeduren stationärer Fälle "
-          f"wurden {len(df_prozeduren_final)} in den Stammdaten gefunden.")
+
+    print(f"Von {len(df_prozeduren)} Prozeduren sind "
+          f"{len(df_prozeduren_inpatients)} von stationären Fällen.")
 
     # 3. Datums- und Zeitspalten in datetime Objekte umwandeln
-    df_prozeduren_final['prozedur_datetime'] = pd.to_datetime(
-        df_prozeduren_final['prozedur_datum'] + "_" + df_prozeduren_final['prozedur_zeit'],
+    df_prozeduren_inpatients['prozedur_datetime'] = pd.to_datetime(
+        df_prozeduren_inpatients['prozedur_datum'] + "_" + df_prozeduren_inpatients['prozedur_zeit'],
         format='%Y-%m-%d_%H:%M:%S',
     )
     # 3.1 Neue Spalte für Beginn des Laborzeitfensters definieren
-    df_prozeduren_final['prozedur_fenster_start'] = pd.to_datetime(
-        df_prozeduren_final['prozedur_datetime'] - pd.Timedelta(hours=labor_window_in_hours),
+    df_prozeduren_inpatients['prozedur_fenster_start'] = pd.to_datetime(
+        df_prozeduren_inpatients['prozedur_datetime'] - pd.Timedelta(hours=labor_window_in_hours),
     )
     # 3.2 Alter für alle fehlenden Fälle berechnen, als Diff zwischen GebDatum und prozedur_datetime
-    alter_aus_gebdatum = df_prozeduren_final['alter_bei_prozedur'].fillna(
-        (df_prozeduren_final['prozedur_datetime'] - df_prozeduren_final['geburtsdatum']).dt.days
+    alter_aus_gebdatum = df_prozeduren_inpatients['alter_bei_prozedur'].fillna(
+        (df_prozeduren_inpatients['prozedur_datetime'] - df_prozeduren_inpatients['geburtsdatum']).dt.days
     )
     alter_aus_gebdatum_float = alter_aus_gebdatum / 365.25
-    df_prozeduren_final['alter_bei_prozedur'] = df_prozeduren_final['alter_bei_prozedur'].fillna(
+    df_prozeduren_inpatients['alter_bei_prozedur'] = df_prozeduren_inpatients['alter_bei_prozedur'].fillna(
         alter_aus_gebdatum_float.round().astype(int)
     )
-    df_prozeduren_final['altersdekade_bei_prozedur'] = np.ceil(df_stammdaten_inpatients['alter_bei_prozedur'] / 10)
+    df_prozeduren_inpatients['altersdekade_bei_prozedur'] = np.ceil(df_stammdaten_inpatients['alter_bei_prozedur'] / 10)
     # 3.3 Entferne Prozeduren mit Alter < 18 Jahren
-    df_prozeduren_no_minors = df_prozeduren_final.query("alter_bei_prozedur >= 18").copy()
+    df_prozeduren_no_minors = df_prozeduren_inpatients.query("alter_bei_prozedur >= 18").copy()
     print(f"Davon sind {len(df_prozeduren_no_minors)} mit alter_bei_prozedur >= 18.\n")
 
-    df_prozeduren_final_filtered = df_prozeduren_no_minors[
+    df_prozeduren_final = df_prozeduren_no_minors[
         [
             'Fallnummer',
+            'Patientennummer',
             'prozedur_datetime',
             'prozedur_fenster_start',
             'alter_bei_prozedur',
@@ -89,11 +79,7 @@ def get_labelled_prozeduren(labor_window_in_hours):
         ]
     ]
 
-    return df_prozeduren_final_filtered
-
-def add_lab_values_to_prozeduren(df_prozeduren):
-    ddf_prozeduren_with_lab_values = add_laborwerte_to_prozeduren(df_prozeduren)
-    return ddf_prozeduren_with_lab_values
+    return df_prozeduren_final
 
 def get_latest_lab_values(ddf):
     """
@@ -269,30 +255,25 @@ def main():
     """ ACHTUNG! Der Befundeimport muss so geändert werden, dass die gelabelten Befunde geladen werden! """
 
     # 2. Füge den Prozeduren anhand Fallnummer und prozedur_datetime die Laborwerte hinzu
-    ddf_proz_with_lab = add_lab_values_to_prozeduren(df_prozeduren)
+    ddf_proz_with_lab = get_prozedur_labor_pivot(df_prozeduren)
 
     # 3. Filtere die Tabelle auf den letzten Ergebniswert je Prozedur und Laborparameter
-    ddf_proz_with_lab_latest = get_latest_lab_values(ddf_proz_with_lab)
-    ddf_proz_with_lab_latest_small = ddf_proz_with_lab_latest[
-        [
-            'Fallnummer',
-            'prozedur_datetime',
-            'alter_bei_prozedur',
-            'geschlecht',
-            'parameterid_effektiv',
-            'ergebniswert_num',
-            'minuten_vor_prozedur',
-        ]
-    ]
+    # ddf_proz_with_lab_latest = get_latest_lab_values(ddf_proz_with_lab)
+    # ddf_proz_with_lab_latest_small = ddf_proz_with_lab_latest[
+    #     [
+    #         'Fallnummer',
+    #         'Patientennummer',
+    #         'prozedur_datetime',
+    #         'alter_bei_prozedur',
+    #         'geschlecht',
+    #         'parameterid_effektiv',
+    #         'ergebniswert_num',
+    #         'minuten_vor_prozedur',
+    #     ]
+    # ]
 
     # 4. Erstelle Pivottabelle mit Laborwerten als Spalten
     # ddf_final_pivot = get_final_pivot_table(ddf_proz_with_lab_latest_small)
-
-    ddf_proz_with_lab_latest_until_2019 = ddf_proz_with_lab_latest[
-        ddf_proz_with_lab_latest['prozedur_datetime'].dt.year <= 2019
-    ]
-    twt = get_time_window_table(ddf_proz_with_lab_latest_until_2019, 24)
-    twt.to_csv('twt_bis_2019_2.csv')
 
 
 

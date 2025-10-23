@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import re
 
-from util_functions import concat_csv_files, OUTPUT_FOLDER
+from util_functions import concat_csv_files
 
 '''
 Zuletzt bearbeitet am 15.10.
@@ -52,7 +52,8 @@ def get_befunde_from_files():
     df_befunde = concat_csv_files(
         folder_path='fromDIZ/Befunde',
         csv_dtype={
-            'DOKNR': np.str_,
+            'Fallnummer': np.int_,
+            'DOKNR': np.int_,
             'ZBEFALL04D': np.str_,
             'DODAT': np.str_,
             'ERDAT': np.str_,
@@ -118,31 +119,14 @@ def get_unique_befunde_per_case_day(df_befunde_dedup):
 
     return df_befunde_unique_caseday
 
-def main():
-    df_befunde = get_befunde_from_files()
-    print(f"\n{len(df_befunde)} Befunde wurden eingelesen.")
+def get_befunde_df():
+    df_source = get_befunde_from_files()
 
-    df_befunde_dedup = dedup_befunde(df_befunde)
-    print(f"{len(df_befunde_dedup)} Befunde sind bezüglich Fallnummer, "
-          f"Befundnummer, Prozedurdatum und Inhalt einzigartig.")
+    df_befunde_dedup = dedup_befunde(df_source)
 
     df_befunde_unique_case_day = get_unique_befunde_per_case_day(df_befunde_dedup)
     print(f"\nEs existieren {len(df_befunde_unique_case_day)} Befunde, an deren Prozedurdatum "
           f"zu diesem Fall kein anderer Befund vorliegt. Somit ist eine eindeutige Zuordung "
           f"zu einer Prozedur möglich.")
 
-    df_befunde_unique_case_day.to_csv(
-        OUTPUT_FOLDER + '2025-10-14_Befunde_15to22.csv',
-        index=False,
-        columns=[
-            'Fallnummer',
-            'prozedur_datum',
-            'DOKNR',
-            'befund_datum',
-            'CONTENT',
-            'assessment',
-        ]
-    )
-
-if __name__ == "__main__":
-    main()
+    return df_befunde_unique_case_day
