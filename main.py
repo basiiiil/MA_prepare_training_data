@@ -4,12 +4,16 @@ ausführen, sodass am Ende nur dieses Script bedient werden muss.
 """
 import datetime
 import pandas as pd
-from dask import dataframe as dd
 import numpy as np
-from get_source_dfs import get_stammdaten_inpatients_df, get_prozeduren_df, get_befunde_df
 import matplotlib.pyplot as plt
 import seaborn as sns
+from dask import dataframe as dd
 
+from functions_befunde import get_befunde_df
+from functions_diagnosen import get_prozedur_charlson_pivot
+from functions_labor import get_prozedur_labor_pivot
+from functions_prozeduren import get_prozeduren_df
+from functions_stammdaten import get_stammdaten_inpatients_df
 from merge_data import merge_befunde_and_prozeduren
 
 def get_now_label():
@@ -80,43 +84,6 @@ def get_labelled_prozeduren(labor_window_in_hours):
     ]
 
     return df_prozeduren_final
-
-def get_latest_lab_values(ddf):
-    """
-    Filtert ein Dask DataFrame, um nur den letzten Laborwert pro Fallnummer
-    und Parameter-ID zu behalten.
-
-    Args:
-        ddf (dd.DataFrame): Das DataFrame mit potenziell mehreren Laborwerten
-                            pro Fall und Parameter. Es muss die Spalten 'Fallnummer',
-                            'parameterid_effektiv' und 'abnahmezeitpunkt_effektiv'
-                            enthalten.
-
-    Returns:
-        dd.DataFrame: Ein gefiltertes DataFrame, das nur noch den jeweils
-                      letzten Laborwert enthält.
-    """
-    print("Filtere nach dem letzten Laborwert pro Fall und Parameter...")
-    # Berechne die neue Spalte 'minuten_vor_prozedur'
-    time_delta_seconds = (
-            ddf['prozedur_datetime'] - ddf['abnahmezeitpunkt_effektiv']
-    ).dt.total_seconds()
-    ddf['minuten_vor_prozedur'] = time_delta_seconds / 60
-
-    # Sortiere das DataFrame so, dass der neueste Wert für jede Gruppe oben steht.
-    # Dies ist eine vorbereitende Operation für drop_duplicates.
-    # persist() kann hier die Performance verbessern, indem das sortierte
-    # Zwischenergebnis im Speicher gehalten wird.
-    ddf_sorted = ddf.sort_values('minuten_vor_prozedur').persist()
-
-    # Behalte nur den ersten Eintrag pro Gruppe ('Fallnummer' und 'parameterid_effektiv').
-    # Da wir absteigend sortiert haben, ist dies automatisch der letzte/neueste Wert.
-    ddf_latest = ddf_sorted.drop_duplicates(subset=[
-        'Fallnummer', 'prozedur_datetime', 'parameterid_effektiv'
-    ]).copy()
-
-    print("Filterung abgeschlossen.")
-    return ddf_latest
 
 def create_laborwerte_violinplot(ddf_labor):
     # 1. Berechne Anzahl und Mittelwert für jeden Parameter
@@ -254,10 +221,38 @@ def main():
     df_prozeduren = get_labelled_prozeduren(168)
     """ ACHTUNG! Der Befundeimport muss so geändert werden, dass die gelabelten Befunde geladen werden! """
 
-    # 2. Füge den Prozeduren anhand Fallnummer und prozedur_datetime die Laborwerte hinzu
-    ddf_proz_with_lab = get_prozedur_labor_pivot(df_prozeduren)
+    # 2. Hole die Pivottabelle mit Laborwerten
+    proz_lab_pivot = get_prozedur_labor_pivot(df_prozeduren)
 
-    # 3. Filtere die Tabelle auf den letzten Ergebniswert je Prozedur und Laborparameter
+    # proz_lab_pivot.to_csv(get_now_label() + "prozedur_labor_pivot.csv", index=False)
+
+
+    # 3. Hole die Pivottabelle mit Diagnosen
+    proz_diagnosen_pivot = get_prozedur_charlson_pivot(df_prozeduren)
+
+    # 4. Erstelle die finale Tabelle
+    # 4.1 Merge Labor auf Prozeduren
+    ddf_proz_mit_labor = pd.merge(
+        df_prozeduren,
+        proz_lab_pivot,
+        on=['Fallnummer', 'prozedur_datetime'],
+        how='left',
+    ).reset_index()
+
+    # 4.2 Merge Diagnosen auf Prozeduren
+    ddf_proz_mit_labor_und_diagnosen = pd.merge(
+        ddf_proz_mit_labor,
+        proz_lab_pivot,
+        on=['Fallnummer', 'prozedur_datetime'],
+        how='left',
+    ).reset_index()
+
+    print(f"Länge von ddf_proz_mit_labor_und_diagnosen: {len(ddf_proz_mit_labor_und_diagnosen)}")
+    print(ddf_proz_mit_labor_und_diagnosen.dtypes)
+
+
+
+
     # ddf_proz_with_lab_latest = get_latest_lab_values(ddf_proz_with_lab)
     # ddf_proz_with_lab_latest_small = ddf_proz_with_lab_latest[
     #     [

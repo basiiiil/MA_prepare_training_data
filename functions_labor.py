@@ -2,7 +2,7 @@ import datetime
 from dask import dataframe as dd
 import pandas as pd
 import numpy as np
-
+from sympy.physics.units import length
 
 """
 WAS DIESES SCRIPT TUN SOLL:
@@ -306,8 +306,112 @@ def normalize_ids_and_timestamps_pandas(df):
     return df
 
 def get_labor_ddf():
+    '''
+    :return: dd.Dataframe
+    '''
     ddf_labor = get_complete_laborwerte_ddf()
     ddf_labor_filtered = filter_for_relevant_rows(ddf_labor)
     ddf_labor_normalized = normalize_ids_and_timestamps(ddf_labor_filtered)
 
     return ddf_labor_normalized
+
+def get_latest_lab_values(ddf_labor):
+    """
+    Filtert ein Dask DataFrame, um nur den letzten Laborwert pro Fallnummer
+    und Parameter-ID zu behalten.
+
+    Args:
+        ddf_labor (dd.DataFrame): Das DataFrame mit potenziell mehreren Laborwerten
+                            pro Fall und Parameter. Es muss die Spalten 'Fallnummer',
+                            'parameterid_effektiv' und 'abnahmezeitpunkt_effektiv'
+                            enthalten.
+
+    Returns:
+        dd.DataFrame: Ein gefiltertes DataFrame, das nur noch den jeweils
+                      letzten Laborwert enthält.
+    """
+    print(
+        datetime.datetime.now().strftime("%H:%M:%S")
+        + " - Filtere nach dem letzten Laborwert pro Prozedur und Parameter......"
+    )
+    # Berechne die neue Spalte 'minuten_vor_prozedur'
+    time_delta_seconds = (
+            ddf_labor['prozedur_datetime'] - ddf_labor['abnahmezeitpunkt_effektiv']
+    ).dt.total_seconds()
+    ddf_labor['minuten_vor_prozedur'] = time_delta_seconds / 60
+
+    # Sortiere das DataFrame so, dass der neueste Wert für jede Gruppe oben steht.
+    # Dies ist eine vorbereitende Operation für drop_duplicates.
+    # persist() kann hier die Performance verbessern, indem das sortierte
+    # Zwischenergebnis im Speicher gehalten wird.
+    ddf_sorted = ddf_labor.sort_values('minuten_vor_prozedur').persist()
+
+    # Behalte nur den ersten Eintrag pro Gruppe ('Fallnummer' und 'parameterid_effektiv').
+    # Da wir absteigend sortiert haben, ist dies automatisch der letzte/neueste Wert.
+    ddf_latest = ddf_sorted.drop_duplicates(subset=[
+        'Fallnummer', 'prozedur_datetime', 'parameterid_effektiv'
+    ]).copy()
+
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Filterung abgeschlossen.")
+    return ddf_latest
+
+def get_prozedur_labor_pivot(df_prozeduren):
+    '''
+    :param df_prozeduren: pd.Dataframe
+    :return: pd.Dataframe
+    '''
+    ddf_labor = get_labor_ddf()
+    ddf_prozeduren = dd.from_pandas(df_prozeduren)
+
+    # 1. Merge Labordaten auf die Prozeduren.
+    #   Dabei fliegen alle Labordaten raus, deren Fallnummer nicht in der Prozedurentabelle vorkommt.
+    #   Laborwerte werden immer dann zugewiesen, wenn ihr 'abnahmezeitpunkt_effektiv' innerhalb des
+    #   Fensters liegt (also nach 'prozedur_fenster_start', aber vor 'prozedur_datetime'.
+    #   Pro Prozedur wird es dadurch für jeden Laborwert eine Zeile geben.
+    ddf_labor['Fallnummer'] = ddf_labor['Fallnummer'].astype('int32')
+    ddf_prozeduren['Fallnummer'] = ddf_prozeduren['Fallnummer'].astype('int32')
+    ddf_merged = dd.merge(
+        ddf_prozeduren,
+        ddf_labor,
+        on=['Fallnummer'],
+        how='inner',
+    ).reset_index(drop=True)
+
+    # 2. Filtere auf Laborwerte, die innerhalb des Laborfensters liegen
+    query_str = 'prozedur_fenster_start <= abnahmezeitpunkt_effektiv <= prozedur_datetime'
+    ddf_labor_filtered = ddf_merged.query(query_str)
+
+    # 3. Filtere auf die jeweils letzten Werte je Parameter je Prozedur
+    ddf_labor_latest = get_latest_lab_values(ddf_labor_filtered)
+
+    # 4. Minimiere die Größe des Dataframes
+    ddf_labor_latest_small = ddf_labor_latest[[
+        'Fallnummer',
+        'prozedur_datetime',
+        'parameterid_effektiv',
+        'ergebniswert_num'
+    ]]
+    # ddf_labor_latest_small['Fallnummer'] = ddf_labor_latest_small['Fallnummer'].astype('int32')
+    # ddf_labor_latest_small['ergebniswert_num'] = ddf_labor_latest_small['ergebniswert_num'].astype('float32')
+    # ddf_labor_latest_small = ddf_labor_latest_small.categorize(columns=['parameterid_effektiv'])
+    df_labor_latest_pandas = ddf_labor_latest_small.compute()
+
+    # 5. Erstelle Pivottabelle
+    #    Wir nutzen set_index().unstack() statt pivot_table(),
+    #    um den "ArrayMemoryError" (kartesisches Produkt) zu vermeiden.
+    # 5.1. Setze ALLE drei Spalten als Index
+    indexed_pandas_df = df_labor_latest_pandas.set_index(
+        ['Fallnummer', 'prozedur_datetime', 'parameterid_effektiv']
+    )
+
+    # 5.2. Wähle die Wertespalte (jetzt eine Series)
+    value_series = indexed_pandas_df['ergebniswert_num']
+
+    # 5.3. "Entstapel" die 'parameterid_effektiv'-Ebene zu Spalten
+    #     Dies erstellt nur Zeilen für existierende (Fall, Zeit)-Paare.
+    pivot_df = value_series.unstack(level='parameterid_effektiv')
+
+    # 5.4. Hol den Index (Fallnummer, prozedur_datetime) als Spalten zurück
+    pivot_df = pivot_df.reset_index()
+
+    return pivot_df
