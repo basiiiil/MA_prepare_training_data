@@ -160,7 +160,9 @@ def get_complete_laborwerte_ddf():
         # df_labor_blutgase_filtered_small
     ])
 
-    return df_labor_complete
+    df_labor_complete_dedup = df_labor_complete.drop_duplicates().copy()
+
+    return df_labor_complete_dedup
 
 def filter_for_relevant_rows(ddf, variant):
     '''

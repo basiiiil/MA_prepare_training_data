@@ -275,9 +275,6 @@ def main():
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Let's go!")
     # 1. Hole Prozeduren
     df_prozeduren = get_prozeduren_for_training()
-    print("Prozeduren value_counts:")
-    print(df_prozeduren['predicted_label'].value_counts())
-    print(df_prozeduren.columns)
 
     # 2. Merge Labor auf Prozeduren
     # 2.1 Lade proz_lab_pivot
@@ -287,7 +284,7 @@ def main():
         variant='complete'
     )
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - proz_lab_pivot erfolgreich geladen.")
-    print(f"Länge proz_lab_pivot: {len(proz_lab_pivot)}")
+    # print(f"Länge proz_lab_pivot: {len(proz_lab_pivot)}")
     # print(proz_lab_pivot.columns)
 
     # 2.2 Merge (mittels inner join, weil Prozeduren ohne Laborwerte im Laborfenster nicht beachtet werden)
@@ -297,14 +294,14 @@ def main():
         on=['Fallnummer', 'prozedur_datetime'],
         how='inner'
     )
-    print(f"Länge proz_mit_labor: {len(proz_mit_labor)}")
-    print(proz_mit_labor.columns)
+    # print(f"Länge proz_mit_labor: {len(proz_mit_labor)}")
+    # print(proz_mit_labor.columns)
 
     # 3. Merge Charlson Gruppen auf Prozeduren-Labor-DF
     # 3.1 Lade proz_diagnosen_pivot
     proz_diagnosen_pivot = get_prozedur_charlson_pivot(df_prozeduren)
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - proz_diagnosen_pivot erfolgreich geladen.")
-    print(f"Länge proz_diagnosen_pivot: {len(proz_diagnosen_pivot)}")
+    # print(f"Länge proz_diagnosen_pivot: {len(proz_diagnosen_pivot)}")
 
     # 3.2 Merge (mittels left join, weil auch Prozeduren ohne Charlson-Gruppen beachtet werden
     proz_mit_labor_und_diagnosen = pd.merge(
@@ -315,8 +312,8 @@ def main():
     )
 
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Finaler Merge erfolgreich.")
-    print(proz_mit_labor_und_diagnosen.columns)
-    print(f"Länge proz_mit_labor_und_diagnosen: {len(proz_mit_labor_und_diagnosen)}")
+    # print(proz_mit_labor_und_diagnosen.columns)
+    # print(f"Länge proz_mit_labor_und_diagnosen: {len(proz_mit_labor_und_diagnosen)}")
 
     # 4. Fülle alle NaN-Felder in den Charlsonspalten mit False, da dort keine qualifizierenden Diagnosen vorliegen.
     #    Füge außerdem die Spalte 'predicted_label_int' fürs Training hinzu
