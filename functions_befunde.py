@@ -52,11 +52,11 @@ def get_befunde_from_files():
     df_befunde = concat_csv_files(
         folder_path='fromDIZ/Befunde',
         csv_dtype={
-            'Fallnummer': np.int_,
-            'DOKNR': np.int_,
-            'ZBEFALL04D': np.str_,
-            'DODAT': np.str_,
-            'ERDAT': np.str_,
+            'Fallnummer': int,
+            'DOKNR': int,
+            'ZBEFALL04D': str,
+            'DODAT': str,
+            'ERDAT': str,
         }
     )
     df_befunde['Fallnummer'] = df_befunde['FALNR']

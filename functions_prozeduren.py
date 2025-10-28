@@ -1,6 +1,11 @@
 import pandas as pd
 import numpy as np
 
+from functions_befunde import get_befunde_df
+from functions_stammdaten import get_stammdaten_inpatients_df
+from merge_data import merge_befunde_and_prozeduren
+
+
 def get_prozeduren_df():
     """
     :return: pandas dataframe
@@ -67,3 +72,50 @@ def get_prozeduren_df():
           f"sind eindeutig. Sie gehören zu {len(df_fallnummern_dedup)} Fallnummern.")
 
     return df_prozeduren_dedup
+
+def get_prozeduren_for_labelling():
+    # 1. Daten importieren
+    df_stammdaten_inpatients = get_stammdaten_inpatients_df()
+    df_befunde = get_befunde_df()
+    df_prozeduren = get_prozeduren_df()
+
+    # 2. Prozedurentabelle erstellen
+    # 2.1 Befunde und Prozeduren so zusammenbringen, dass für jeden Fall pro Tag nur eine Prozedur existiert.
+    df_prozeduren_with_befund = merge_befunde_and_prozeduren(
+        df_befunde=df_befunde,
+        df_prozeduren=df_prozeduren,
+    )
+
+    # 2.2 Die Ergebnistabelle mit folgenden Spalten erstellen:
+    #   Fallnummer, prozedur_datum, prozedur_zeit, geschlecht, geburtsdatum, lae_kategorie
+    #   UNIQUE KEY ist Fallnummer + prozedur_datum
+    df_prozeduren_inpatients = pd.merge(
+        df_prozeduren_with_befund,
+        df_stammdaten_inpatients,
+        on=['Fallnummer'],
+        how='inner',
+    )
+
+    print(f"Von {len(df_prozeduren)} Prozeduren sind "
+          f"{len(df_prozeduren_inpatients)} von stationären Fällen.")
+
+    # 3. Datums- und Zeitspalten in datetime Objekte umwandeln
+    df_prozeduren_inpatients['prozedur_datetime'] = pd.to_datetime(
+        df_prozeduren_inpatients['prozedur_datum'] + "_" + df_prozeduren_inpatients['prozedur_zeit'],
+        format='%Y-%m-%d_%H:%M:%S',
+    )
+    # Alter für alle fehlenden Fälle berechnen, als Diff zwischen GebDatum und prozedur_datetime
+    alter_aus_gebdatum = df_prozeduren_inpatients['alter_bei_prozedur'].fillna(
+        (df_prozeduren_inpatients['prozedur_datetime'] - df_prozeduren_inpatients['geburtsdatum']).dt.days
+    )
+    alter_aus_gebdatum_float = alter_aus_gebdatum / 365.25
+    df_prozeduren_inpatients['alter_bei_prozedur'] = df_prozeduren_inpatients['alter_bei_prozedur'].fillna(
+        alter_aus_gebdatum_float.round().astype(int)
+    )
+    df_prozeduren_inpatients['altersdekade_bei_prozedur'] = np.ceil(df_stammdaten_inpatients['alter_bei_prozedur'] / 10)
+    # 3.3 Entferne Prozeduren mit Alter < 18 Jahren
+    df_prozeduren_no_minors = df_prozeduren_inpatients.query("alter_bei_prozedur >= 18").copy()
+    print(f"Davon sind {len(df_prozeduren_no_minors)} mit alter_bei_prozedur >= 18.\n")
+
+    return df_prozeduren_no_minors
+

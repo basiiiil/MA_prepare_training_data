@@ -5,14 +5,14 @@ import datetime
 
 OUTPUT_FOLDER = 'Outputs/'
 
-def concat_csv_files(folder_path, csv_dtype="string", csv_sep=",", csv_encoding="utf-8"):
+def concat_csv_files(folder_path, csv_dtype, csv_sep=",", csv_encoding="utf-8"):
     """
     Concats all CSV files in a specified folder into a single pandas DataFrame,
     but only if they all have the exact same columns.
 
     Args:
         folder_path (str): The path to the folder containing the CSV files.
-        csv_dtype (dict): A dictionary mapping column names to dtypes.
+        csv_dtype (dict or None): A dictionary mapping column names to dtypes.
         csv_sep (str): The CSV separator to use.
         csv_encoding (str): The CSV encoding.
 

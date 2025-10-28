@@ -7,83 +7,27 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from dask import dataframe as dd
 
-from functions_befunde import get_befunde_df
 from functions_diagnosen import get_prozedur_charlson_pivot
 from functions_labor import get_prozedur_labor_pivot
-from functions_prozeduren import get_prozeduren_df
-from functions_stammdaten import get_stammdaten_inpatients_df
-from merge_data import merge_befunde_and_prozeduren
+from util_functions import concat_csv_files
+
 
 def get_now_label():
     return datetime.datetime.now().strftime("%Y-%m-%d_%H:%M_")
 
-def get_labelled_prozeduren(labor_window_in_hours):
-    # 1. Daten importieren
-    df_stammdaten_inpatients = get_stammdaten_inpatients_df()
-    """
-    ACHTUNG!
-    - Der Befundeimport muss so geändert werden, dass die gelabelten Befunde geladen werden!
-    """
-    df_befunde = get_befunde_df()
-    df_prozeduren = get_prozeduren_df()
-
-    # 2. Prozedurentabelle erstellen
-    # 2.1 Befunde und Prozeduren so zusammenbringen, dass für jeden Fall pro Tag nur eine Prozedur existiert.
-    df_prozeduren_with_befund = merge_befunde_and_prozeduren(
-        df_befunde=df_befunde,
-        df_prozeduren=df_prozeduren,
+def get_labeled_prozeduren_from_file():
+    df_befunde_labeled = concat_csv_files(
+        folder_path='befunde_mit_label',
+        csv_dtype=None,
     )
 
-    # 2.2 Die Ergebnistabelle mit folgenden Spalten erstellen:
-    #   Fallnummer, prozedur_datum, prozedur_zeit, geschlecht, geburtsdatum, lae_kategorie
-    #   UNIQUE KEY ist Fallnummer + prozedur_datum
-    df_prozeduren_inpatients = pd.merge(
-        df_prozeduren_with_befund,
-        df_stammdaten_inpatients,
-        on=['Fallnummer'],
-        how='inner',
-    )
+    df_befunde_labeled['prozedur_datetime'] = pd.to_datetime(df_befunde_labeled['prozedur_datetime'])
+    # df_befunde_labeled['geschlecht'] = df_befunde_labeled['geschlecht'].astype('category')
+    df_befunde_labeled['alter_bei_prozedur'] = df_befunde_labeled['alter_bei_prozedur'].astype(int)
+    # df_befunde_labeled['predicted_label'] = df_befunde_labeled['predicted_label'].astype('category')
 
-    print(f"Von {len(df_prozeduren)} Prozeduren sind "
-          f"{len(df_prozeduren_inpatients)} von stationären Fällen.")
-
-    # 3. Datums- und Zeitspalten in datetime Objekte umwandeln
-    df_prozeduren_inpatients['prozedur_datetime'] = pd.to_datetime(
-        df_prozeduren_inpatients['prozedur_datum'] + "_" + df_prozeduren_inpatients['prozedur_zeit'],
-        format='%Y-%m-%d_%H:%M:%S',
-    )
-    # 3.1 Neue Spalte für Beginn des Laborzeitfensters definieren
-    df_prozeduren_inpatients['prozedur_fenster_start'] = pd.to_datetime(
-        df_prozeduren_inpatients['prozedur_datetime'] - pd.Timedelta(hours=labor_window_in_hours),
-    )
-    # 3.2 Alter für alle fehlenden Fälle berechnen, als Diff zwischen GebDatum und prozedur_datetime
-    alter_aus_gebdatum = df_prozeduren_inpatients['alter_bei_prozedur'].fillna(
-        (df_prozeduren_inpatients['prozedur_datetime'] - df_prozeduren_inpatients['geburtsdatum']).dt.days
-    )
-    alter_aus_gebdatum_float = alter_aus_gebdatum / 365.25
-    df_prozeduren_inpatients['alter_bei_prozedur'] = df_prozeduren_inpatients['alter_bei_prozedur'].fillna(
-        alter_aus_gebdatum_float.round().astype(int)
-    )
-    df_prozeduren_inpatients['altersdekade_bei_prozedur'] = np.ceil(df_stammdaten_inpatients['alter_bei_prozedur'] / 10)
-    # 3.3 Entferne Prozeduren mit Alter < 18 Jahren
-    df_prozeduren_no_minors = df_prozeduren_inpatients.query("alter_bei_prozedur >= 18").copy()
-    print(f"Davon sind {len(df_prozeduren_no_minors)} mit alter_bei_prozedur >= 18.\n")
-
-    df_prozeduren_final = df_prozeduren_no_minors[
-        [
-            'Fallnummer',
-            'Patientennummer',
-            'prozedur_datetime',
-            'prozedur_fenster_start',
-            'alter_bei_prozedur',
-            'geschlecht',
-            'altersdekade_bei_prozedur'
-        ]
-    ]
-
-    return df_prozeduren_final
+    return df_befunde_labeled
 
 def create_laborwerte_violinplot(ddf_labor):
     # 1. Berechne Anzahl und Mittelwert für jeden Parameter
@@ -217,88 +161,94 @@ def create_time_window_heatmap(pivot_df, num_hours_per_window):
 
 def main():
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Let's go!")
-    # 1. Hole Prozeduren, mit Zeitfenster gesamt = 7 Tage * 24h = 168h
-    df_prozeduren = get_labelled_prozeduren(168)
-    """ ACHTUNG! Der Befundeimport muss so geändert werden, dass die gelabelten Befunde geladen werden! """
+    # 1. Hole Prozeduren
+    df_prozeduren = get_labeled_prozeduren_from_file()
+
+    # 1.1 Filtere auf LAE-Kategorie 0 (=LAE ausgeschlossen) und 1 (=LAE nachgewiesen) und confidence >= 0.9
+    df_prozeduren_for_training = df_prozeduren[
+        ((df_prozeduren['predicted_label'] == "Keine LE (0)")
+        | (df_prozeduren['predicted_label'] == "LE vorhanden (1)"))
+        & (df_prozeduren['confidence'] >= 0.9)
+    ].copy()
+
+    print(f"{len(df_prozeduren_for_training)} von {len(df_prozeduren)} Prozeduren haben ein "
+          f"confidence-Wert >= 0.9 und sind in LAE-Kategorie 'Keine LE (0)' oder 'LE vorhanden (1)'.")
 
     # 2. Hole die Pivottabelle mit Laborwerten
-    proz_lab_pivot = get_prozedur_labor_pivot(df_prozeduren)
+    proz_lab_pivot = get_prozedur_labor_pivot(
+        df_prozeduren_for_training,
+        labor_window_in_hours=168,
+        variant='complete'
+    )
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Schritt 2 (proz_lab_pivot) ist fertig")
 
     # proz_lab_pivot.to_csv(get_now_label() + "prozedur_labor_pivot.csv", index=False)
 
-
     # 3. Hole die Pivottabelle mit Diagnosen
-    proz_diagnosen_pivot = get_prozedur_charlson_pivot(df_prozeduren)
+    proz_diagnosen_pivot = get_prozedur_charlson_pivot(df_prozeduren_for_training)
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Schritt 3 (proz_diagnosen_pivot) ist fertig")
 
     # 4. Erstelle die finale Tabelle
     # 4.1 Merge Labor auf Prozeduren
-    ddf_proz_mit_labor = pd.merge(
-        df_prozeduren,
+    df_proz_mit_labor = pd.merge(
+        df_prozeduren_for_training,
         proz_lab_pivot,
         on=['Fallnummer', 'prozedur_datetime'],
-        how='left',
-    ).reset_index()
+        how='inner'
+    )
 
     # 4.2 Merge Diagnosen auf Prozeduren
-    ddf_proz_mit_labor_und_diagnosen = pd.merge(
-        ddf_proz_mit_labor,
-        proz_lab_pivot,
+    df_final_for_training = pd.merge(
+        df_proz_mit_labor,
+        proz_diagnosen_pivot,
         on=['Fallnummer', 'prozedur_datetime'],
-        how='left',
-    ).reset_index()
+        how='left'
+    )
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Schritt 4 (merges) ist fertig")
 
-    print(f"Länge von ddf_proz_mit_labor_und_diagnosen: {len(ddf_proz_mit_labor_und_diagnosen)}")
-    print(ddf_proz_mit_labor_und_diagnosen.dtypes)
+    # 5. Fülle alle NaN-Felder in den Charlsonspalten mit False, da dort keine qualifizierenden Diagnosen vorliegen.
+    #    Füge außerdem die Spalte 'predicted_label_int' fürs Training hinzu
+    for i in range(1, 18):
+        df_final_for_training[f'charlson_group_{i}'] = df_final_for_training[
+            f'charlson_group_{i}'].fillna(False)
+    df_final_for_training['predicted_label_int'] = df_final_for_training['predicted_label'].apply(
+        lambda x: 0 if x == 'Keine LE (0)' else 1
+    )
 
+    # 6. Filtere auf relevante Spalten
 
+    columns_to_drop = [
+        'prozedur_datum',
+        'prozedur_zeit',
+        'befund_datum',
+        'ORGFA',
+        'ORGPF',
+        'DOKNR',
+        'ZBEFALL04B',
+        'ZBEFALL04D',
+        'DODAT',
+        'ERDAT',
+        'UPDAT',
+        'geburtsdatum',
+        'CONTENT',
+        'predicted_label',
+        'confidence',
+        'prozedur_fenster_start',
+    ]
+    df_final_for_training = df_final_for_training.drop(columns=columns_to_drop)
 
-
-    # ddf_proz_with_lab_latest = get_latest_lab_values(ddf_proz_with_lab)
-    # ddf_proz_with_lab_latest_small = ddf_proz_with_lab_latest[
-    #     [
-    #         'Fallnummer',
-    #         'Patientennummer',
-    #         'prozedur_datetime',
-    #         'alter_bei_prozedur',
-    #         'geschlecht',
-    #         'parameterid_effektiv',
-    #         'ergebniswert_num',
-    #         'minuten_vor_prozedur',
-    #     ]
-    # ]
-
-    # 4. Erstelle Pivottabelle mit Laborwerten als Spalten
-    # ddf_final_pivot = get_final_pivot_table(ddf_proz_with_lab_latest_small)
-
-
-
-
-    # ddf_proz_with_lab_latest_small.to_csv(
-    #     get_now_label() + 'prozeduren_with_latest_lab_values.csv',
-    #     single_file=True,
-    #     index=False,
+    print("Shape von ddf_final_for_training:")
+    print(df_final_for_training.shape)
+    # df_final_for_training.dtypes.to_csv(
+    #     get_now_label() + "proz_mit_labor_und_diagnosen_dtypes.csv",
     # )
+    df_final_for_training.to_csv(
+        get_now_label() + "proz_mit_labor_und_diagnosen_final.csv",
+        index=False,
+        # columns=relevant_columns,
+    )
 
-
-
-    # ddf = dd.read_csv('2025-10-19_laborwerte_filtered.csv')
-    # ddf_dedup_cases = ddf.drop_duplicates(subset=['Fallnummer', 'prozedur_datetime']).copy()
-    # num_cases = len(ddf_dedup_cases)
-    # print(num_cases)
-    # zeitfenster_pivot = get_time_window_table(ddf, 8)
-    # zeitfenster_pivot = zeitfenster_pivot.reset_index(drop=True).rename_axis(None, axis=1)
-    # zeitfenster_pivot['anzahl_einträge'] = zeitfenster_pivot['parameterid_effektiv'].apply(
-    #     lambda param: len(ddf[ddf['parameterid_effektiv'] == param])
-    # )
-    # zeitfenster_pivot['abdeckung'] = np.round((zeitfenster_pivot['anzahl_einträge'] * 100 / num_cases), 1)
-    # zeitfenster_labels = ['parameterid_effektiv']
-    # zeitfenster_labels.extend([f'{i * 8}-{(i + 1) * 8}h' for i in range(21)])
-    # zeitfenster_labels.extend(['anzahl_einträge', 'abdeckung'])
-    # zeitfenster_pivot.columns = zeitfenster_labels
-    # zeitfenster_pivot.to_csv(
-    #     get_now_label() + "laborwerte_pro_zeitfenster_mit_abdeckung.csv",
-    # )
-
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - All done!")
 
 if __name__ == "__main__":
     main()

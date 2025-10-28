@@ -1,8 +1,9 @@
 import datetime
 from dask import dataframe as dd
 import pandas as pd
-import numpy as np
-from sympy.physics.units import length
+from pandas import CategoricalDtype
+
+from config import LABOR_PARAMS_EFFEKTIV
 
 """
 WAS DIESES SCRIPT TUN SOLL:
@@ -15,10 +16,29 @@ WAS DIESES SCRIPT TUN SOLL:
         Die Zeichen '<' oder '>' werden einfach entfernt.
     3. Die Parameter-ID ist in der Definitionstabelle enthalten
         
-2. Die Spalten 'Ergebniswert', 'Referenzwert unten' und 'Referenzwert oben' in numerische Werte umwandeln.
+3. Die Spalte 'Ergebniswert' in numerische Werte umwandeln.
 """
 
 """ --- KONFIGURATION --- """
+
+PARAMS_TO_INCLUDE = [
+    'B-MCH_E',
+    'B-WBC_E',
+    'NA_S',
+    'O-NA_Z',
+    'B-HCT_E',
+    'B-MCV_E',
+    'B-HGB_E',
+    'B-MCHC_E',
+    'B-RBC_E',
+    'B-RDW_E',
+    'CKDEPI',
+    'CRE_S',
+    'K_S',
+    'O-K_Z',
+    # 'PTS_C',
+    # 'PT_C',
+]
 
 dtype_lib_laborwerte = {
     'Auftragsnummer': 'Int64',
@@ -45,19 +65,19 @@ dtype_lib_befunde = {
 
 def get_complete_laborwerte_ddf():
     dtype_lib = {
-        # 'Auftragsnummer': np.int_,
-        'Fallnummer': np.int_,
-        'Probeneingangsdatum': np.str_,
-        # 'Ergebnisdatum': np.str_,
-        'Parameterbezeichnung': np.str_,
-        'Ergebniswert': np.str_,
-        # 'Ergebniseinheit': np.str_,
-        # 'Ergebniseinheit (UCUM)': np.str_,
-        # 'Referenzwert unten': np.str_,
-        # 'Referenzwert oben': np.str_,
-        'Parameter-ID primär': np.str_,
-        # 'LOINC-Code': np.str_,
-        # 'Probenart': np.str_,
+        # 'Auftragsnummer': int,
+        'Fallnummer': int,
+        'Probeneingangsdatum': str,
+        'Ergebnisdatum': str,
+        'Parameterbezeichnung': str,
+        'Ergebniswert': str,
+        # 'Ergebniseinheit': str,
+        # 'Ergebniseinheit (UCUM)': str,
+        # 'Referenzwert unten': str,
+        # 'Referenzwert oben': str,
+        'Parameter-ID primär': str,
+        # 'LOINC-Code': str,
+        # 'Probenart': str,
     }
 
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Lese die Labor-CSVs...")
@@ -88,61 +108,63 @@ def get_complete_laborwerte_ddf():
         encoding='utf_8',
         blocksize="64MB"
     )
-    df_labor_complete = dd.concat([df_labor_original, df_labor_fehlende])
-    return df_labor_complete
-
-def get_complete_laborwerte_df_pandas():
-    dtype_lib = {
-        # 'Auftragsnummer': np.int_,
-        'Fallnummer': np.int_,
-        'Probeneingangsdatum': np.str_,
-        # 'Ergebnisdatum': np.str_,
-        'Parameterbezeichnung': np.str_,
-        'Ergebniswert': np.str_,
-        # 'Ergebniseinheit': np.str_,
-        # 'Ergebniseinheit (UCUM)': np.str_,
-        # 'Referenzwert unten': np.str_,
-        # 'Referenzwert oben': np.str_,
-        'Parameter-ID primär': np.str_,
-        # 'LOINC-Code': np.str_,
-        # 'Probenart': np.str_,
-    }
-
-    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Lese die Labor-CSVs...")
-    df_col_names = pd.read_csv(
-        'fromDIZ/20250929_LAE_Risiko_labor_Spaltennamen_AS.csv',
-        delimiter=';',
-        header=None,
-        encoding='iso-8859-1'
-    )
-    col_names = df_col_names.head(1).squeeze().tolist()
-    df_labor_original = pd.read_csv(
-        'fromDIZ/Laborwerte/20250929_LAE_Risiko_laboruntersuchungen_AS.csv',
+    df_labor_blutgase = dd.read_csv(
+        urlpath='fromDIZ/Laborwerte/20251024_LAE_Risiko_laboruntersuchungen_Blutgase_AS.csv',
         dtype=dtype_lib,
-        usecols=list(dtype_lib.keys()),
-        delimiter=';',
-        decimal=',',
-        header=None,
-        names=col_names,
-        encoding='utf_8',
-    )
-    df_labor_fehlende = pd.read_csv(
-        'fromDIZ/Laborwerte/20251007_LAE_Risiko_fehlende_laboruntersuchungen_CW.csv',
-        dtype=dtype_lib,
-        usecols=list(dtype_lib.keys()),
+        usecols=dtype_lib.keys(),
         delimiter=';',
         decimal=',',
         encoding='utf_8',
+        blocksize="64MB"
     )
-    df_labor_complete = pd.concat([df_labor_original, df_labor_fehlende])
+    df_labor_blutgase['probeneingang_dt'] = dd.to_datetime(
+        df_labor_blutgase['Probeneingangsdatum'],
+        format='%Y-%m-%dT%H:%M:%S%z'
+    )
+    df_labor_blutgase['probeneingang_dt'] = df_labor_blutgase['probeneingang_dt'].dt.tz_localize(None)
+    df_labor_blutgase['ergebnis_dt'] = dd.to_datetime(
+        df_labor_blutgase['Ergebnisdatum'],
+        format='%Y-%m-%dT%H:%M:%S%z'
+    )
+    df_labor_blutgase['ergebnis_dt'] = df_labor_blutgase['ergebnis_dt'].dt.tz_localize(None)
+    df_labor_blutgase['time_diff'] = df_labor_blutgase['ergebnis_dt'] - df_labor_blutgase['probeneingang_dt']
+    df_labor_blutgase['time_diff_seconds'] = df_labor_blutgase['time_diff'].dt.total_seconds()
+
+    # Filtere Blutgase, sodass Zeilen mit Ergebnis- VOR Eingangsdatum,
+    # sowie alle Zeilen mit Parameter-ID 'O-PROBENTYP' rausfliegen.
+    query_str = "time_diff_seconds >= 0 and time_diff_seconds <=1800 and `Parameter-ID primär` != 'O-PROBENTYP'"
+    df_labor_blutgase_filtered = df_labor_blutgase.query(query_str)
+    # df_labor_blutgase_filtered = df_labor_blutgase[
+    #     (0 <= df_labor_blutgase['time_diff_seconds'] <= 1800)
+    #     & (df_labor_blutgase['Parameter-ID primär'] != 'O-PROBENTYP')
+    # ]
+    df_labor_blutgase_filtered_small = df_labor_blutgase_filtered[[
+        'Fallnummer',
+        'Probeneingangsdatum',
+        'Ergebnisdatum',
+        'Parameterbezeichnung',
+        'Ergebniswert',
+        'Parameter-ID primär',
+    ]]
+
+    df_labor_complete = dd.concat([df_labor_original, df_labor_fehlende, df_labor_blutgase_filtered_small])
+
     return df_labor_complete
 
-def filter_for_relevant_rows(ddf):
+def filter_for_relevant_rows(ddf, variant):
+    '''
+    :param ddf: dd.Dataframe
+    :param variant: string
+    :return: dd.Dataframe
+    '''
     # Erstelle numerische Spalten
     ddf['ergebniswert_num'] = dd.to_numeric(
         ddf['Ergebniswert'].str.replace(',', '.').str.replace('<', '').str.replace('>', ''),
         errors='coerce'
     )
+    if variant == 'reduced':
+        ddf = ddf[ddf['Parameter-ID primär'].isin(PARAMS_TO_INCLUDE)]
+
     ddf_clean = ddf[
         ddf['Parameterbezeichnung'].notnull()
         & ddf['ergebniswert_num'].notnull()
@@ -281,36 +303,13 @@ def normalize_ids_and_timestamps(ddf):
 
     return ddf
 
-def normalize_ids_and_timestamps_pandas(df):
-    print(
-        datetime.datetime.now().strftime("%H:%M:%S")
-        + " - Korrigiere Parameter-ID und Auftragszeitpunkt für Glukose AccuCheck..."
-    )
-
-    df['parameterid_effektiv'] = df['Parameter-ID primär'].mask(
-        df['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
-        'O-GLU_Z.x'
-    )
-    df['parameterbezeichnung_effektiv'] = df['Parameterbezeichnung'].mask(
-        df['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
-        'Glukose AccuChek'
-    )
-    df['Probeneingangsdatum'] = pd.to_datetime(
-        df['Probeneingangsdatum'],
-        format='%Y-%m-%dT%H:%M:%S%z',
-        errors='coerce'
-    )
-    df['Probeneingangsdatum'] = df['Probeneingangsdatum'].dt.tz_localize(None)
-    df['abnahmezeitpunkt_effektiv'] = calculate_effective_time(df,r"O-GLU_Z\.(\d{4})")
-
-    return df
-
-def get_labor_ddf():
+def get_labor_ddf(variant):
     '''
+    :param variant: string
     :return: dd.Dataframe
     '''
     ddf_labor = get_complete_laborwerte_ddf()
-    ddf_labor_filtered = filter_for_relevant_rows(ddf_labor)
+    ddf_labor_filtered = filter_for_relevant_rows(ddf_labor, variant)
     ddf_labor_normalized = normalize_ids_and_timestamps(ddf_labor_filtered)
 
     return ddf_labor_normalized
@@ -342,9 +341,7 @@ def get_latest_lab_values(ddf_labor):
 
     # Sortiere das DataFrame so, dass der neueste Wert für jede Gruppe oben steht.
     # Dies ist eine vorbereitende Operation für drop_duplicates.
-    # persist() kann hier die Performance verbessern, indem das sortierte
-    # Zwischenergebnis im Speicher gehalten wird.
-    ddf_sorted = ddf_labor.sort_values('minuten_vor_prozedur').persist()
+    ddf_sorted = ddf_labor.sort_values('minuten_vor_prozedur')
 
     # Behalte nur den ersten Eintrag pro Gruppe ('Fallnummer' und 'parameterid_effektiv').
     # Da wir absteigend sortiert haben, ist dies automatisch der letzte/neueste Wert.
@@ -355,12 +352,20 @@ def get_latest_lab_values(ddf_labor):
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Filterung abgeschlossen.")
     return ddf_latest
 
-def get_prozedur_labor_pivot(df_prozeduren):
+def get_prozedur_labor_pivot_pandas(df_prozeduren, labor_window_in_hours, variant):
     '''
     :param df_prozeduren: pd.Dataframe
+    :param labor_window_in_hours: int
+    :param variant: 'reduced' or 'complete'
     :return: pd.Dataframe
     '''
-    ddf_labor = get_labor_ddf()
+
+    # Neue Spalte für Beginn des Laborzeitfensters definieren
+    df_prozeduren['prozedur_fenster_start'] = pd.to_datetime(
+        df_prozeduren['prozedur_datetime'] - pd.Timedelta(hours=labor_window_in_hours),
+    )
+
+    ddf_labor = get_labor_ddf(variant=variant)
     ddf_prozeduren = dd.from_pandas(df_prozeduren)
 
     # 1. Merge Labordaten auf die Prozeduren.
@@ -394,7 +399,9 @@ def get_prozedur_labor_pivot(df_prozeduren):
     # ddf_labor_latest_small['Fallnummer'] = ddf_labor_latest_small['Fallnummer'].astype('int32')
     # ddf_labor_latest_small['ergebniswert_num'] = ddf_labor_latest_small['ergebniswert_num'].astype('float32')
     # ddf_labor_latest_small = ddf_labor_latest_small.categorize(columns=['parameterid_effektiv'])
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Wandle df_labor_latest in pandas df um...")
     df_labor_latest_pandas = ddf_labor_latest_small.compute()
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Umwandlung abgeschlossen.")
 
     # 5. Erstelle Pivottabelle
     #    Wir nutzen set_index().unstack() statt pivot_table(),
@@ -414,4 +421,101 @@ def get_prozedur_labor_pivot(df_prozeduren):
     # 5.4. Hol den Index (Fallnummer, prozedur_datetime) als Spalten zurück
     pivot_df = pivot_df.reset_index()
 
-    return pivot_df
+    # 6. Nur für variant='reduced': Wirf alle Zeilen (also Prozeduren) raus, die Fehlwerte in den Laborparametern haben
+    # Erklärung: Der 'complete' Datensatz darf keine Fehlwerte haben
+    if variant == 'reduced':
+        pivot_df_nona = pivot_df.dropna()
+        num_proz = len(pivot_df)
+        num_proz_nona = len(pivot_df_nona)
+        print(f"Von {num_proz} Prozeduren mit mind. einem Laborwert sind {num_proz_nona} "
+              f"({round(num_proz_nona *100 / num_proz, 1)}%) vollständig "
+              f"für den 'Complete'-Datensatz mit reduzierten Parametern.")
+        return pivot_df_nona
+    else:
+        return pivot_df
+
+def get_prozedur_labor_pivot(df_prozeduren, labor_window_in_hours, variant):
+    '''
+    :param df_prozeduren: pd.Dataframe
+    :param labor_window_in_hours: int
+    :param variant: 'reduced' or 'complete'
+    :return: pd.Dataframe
+    '''
+
+    # Neue Spalte für Beginn des Laborzeitfensters definieren
+    df_prozeduren['prozedur_fenster_start'] = pd.to_datetime(
+        df_prozeduren['prozedur_datetime'] - pd.Timedelta(hours=labor_window_in_hours),
+    )
+
+    ddf_labor = get_labor_ddf(variant=variant)
+    ddf_prozeduren = dd.from_pandas(df_prozeduren)
+
+    # 1. Merge Labordaten auf die Prozeduren.
+    #   Dabei fliegen alle Labordaten raus, deren Fallnummer nicht in der Prozedurentabelle vorkommt.
+    #   Laborwerte werden immer dann zugewiesen, wenn ihr 'abnahmezeitpunkt_effektiv' innerhalb des
+    #   Fensters liegt (also nach 'prozedur_fenster_start', aber vor 'prozedur_datetime'.
+    #   Pro Prozedur wird es dadurch für jeden Laborwert eine Zeile geben.
+    ddf_labor['Fallnummer'] = ddf_labor['Fallnummer'].astype('int32')
+    ddf_prozeduren['Fallnummer'] = ddf_prozeduren['Fallnummer'].astype('int32')
+    ddf_merged = dd.merge(
+        ddf_prozeduren,
+        ddf_labor,
+        on=['Fallnummer'],
+        how='inner',
+    ).reset_index(drop=True)
+
+    # 2. Filtere auf Laborwerte, die innerhalb des Laborfensters liegen
+    query_str = 'prozedur_fenster_start <= abnahmezeitpunkt_effektiv <= prozedur_datetime'
+    ddf_labor_filtered = ddf_merged.query(query_str)
+
+    # 3. Filtere auf die jeweils letzten Werte je Parameter je Prozedur
+    ddf_labor_latest = get_latest_lab_values(ddf_labor_filtered)
+
+    ddf_labor_latest['Fallnummer_str'] = ddf_labor_latest['Fallnummer'].astype(str)
+    ddf_labor_latest['Fall_dt'] = ddf_labor_latest['Fallnummer_str'].str.cat(
+        others=ddf_labor_latest['prozedur_datetime'].dt.strftime('%Y-%m-%d_%H:%M:%S'),
+        sep='+',
+    )
+
+    # 4. Minimiere die Größe des Dataframes
+    print("4. Minimiere die Größe des Dataframes...")
+    ddf_labor_latest_small = ddf_labor_latest[[
+        'Fall_dt',
+        # 'Fallnummer',
+        # 'prozedur_datetime',
+        'parameterid_effektiv',
+        'ergebniswert_num'
+    ]]
+    # print(f"length of ddf_labor_latest_small: {len(ddf_labor_latest_small)}")
+    # print(f"Num unique Fall_dt: {ddf_labor_latest_small['Fall_dt'].nunique().compute()}")
+
+    param_categories = CategoricalDtype(LABOR_PARAMS_EFFEKTIV)
+
+    ddf_labor_latest_small['parameterid_effektiv'] = ddf_labor_latest_small['parameterid_effektiv'].astype(
+        param_categories
+    )
+
+    ddf_prozeduren['Fallnummer_str'] = ddf_prozeduren['Fallnummer'].astype(str)
+    ddf_prozeduren['Fall_dt'] = ddf_prozeduren['Fallnummer_str'].str.cat(
+        others=ddf_prozeduren['prozedur_datetime'].dt.strftime('%Y-%m-%d_%H:%M:%S'),
+        sep='+',
+    )
+
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Erstelle Pivottabelle...")
+    pivot_ddf = dd.pivot_table(
+        df=ddf_labor_latest_small,
+        index='Fall_dt',
+        columns='parameterid_effektiv',
+        values='ergebniswert_num',
+        aggfunc='first',
+    ).reset_index()
+
+    ddf_proz_with_lab = dd.merge(
+        ddf_prozeduren,
+        pivot_ddf,
+        on=['Fall_dt'],
+        how='left'
+    ).reset_index(drop=True)
+
+
+    return ddf_proz_with_lab

@@ -75,6 +75,7 @@ def get_prozedur_charlson_pivot(df_prozeduren):
     df_diagnosen = get_diagnosen_df()
 
     # Diagnosen auf Prozeduren mergen
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Merge Prozeduren und Diagnosen...")
     df_merged = pd.merge(
         df_prozeduren,
         df_diagnosen,
