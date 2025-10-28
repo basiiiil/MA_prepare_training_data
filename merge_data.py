@@ -68,3 +68,4 @@ def add_laborwerte_to_prozeduren(df_prozeduren):
     # ddf_labor_filtered = ddf_merged.query(query_str)
     #
     # return ddf_labor_filtered
+

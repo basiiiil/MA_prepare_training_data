@@ -5,7 +5,13 @@ import datetime
 
 OUTPUT_FOLDER = 'Outputs/'
 
-def concat_csv_files(folder_path, csv_dtype, csv_sep=",", csv_encoding="utf-8"):
+def concat_csv_files(
+        folder_path,
+        csv_dtype,
+        csv_cols,
+        csv_sep=",",
+        csv_encoding="utf-8",
+):
     """
     Concats all CSV files in a specified folder into a single pandas DataFrame,
     but only if they all have the exact same columns.
@@ -13,6 +19,7 @@ def concat_csv_files(folder_path, csv_dtype, csv_sep=",", csv_encoding="utf-8"):
     Args:
         folder_path (str): The path to the folder containing the CSV files.
         csv_dtype (dict or None): A dictionary mapping column names to dtypes.
+        csv_cols (list): A list of column names.
         csv_sep (str): The CSV separator to use.
         csv_encoding (str): The CSV encoding.
 
@@ -46,6 +53,7 @@ def concat_csv_files(folder_path, csv_dtype, csv_sep=",", csv_encoding="utf-8"):
             quotechar='"',
             # on_bad_lines="warn",
             keep_default_na=False,
+            usecols=csv_cols,
         )
         reference_cols = list(reference_df.columns)
         dfs.append(reference_df)
@@ -65,7 +73,8 @@ def concat_csv_files(folder_path, csv_dtype, csv_sep=",", csv_encoding="utf-8"):
                 encoding=csv_encoding,
                 quotechar='"',
                 on_bad_lines="warn",
-                keep_default_na=False
+                keep_default_na=False,
+                usecols=csv_cols,
             )
             current_cols = list(current_df.columns)
 

@@ -1,6 +1,10 @@
 import datetime
 import pandas as pd
 import numpy as np
+from dask import dataframe as dd
+
+from config import CHARLSON_GROUPS
+
 
 def get_diagnosen_df():
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Lese Diagnosen...")
@@ -68,10 +72,6 @@ def get_diagnosen_df():
     return df_diagnosen_dedup
 
 def get_prozedur_charlson_pivot(df_prozeduren):
-    # df_prozeduren_dedup = df_prozeduren.drop_duplicates(subset=['Fallnummer', 'prozedur_datetime']).copy()
-    # print(f"len(df_prozeduren): {len(df_prozeduren)}")
-    # print(f"len(df_prozeduren_dedup): {len(df_prozeduren_dedup)}")
-
     df_diagnosen = get_diagnosen_df()
 
     # Diagnosen auf Prozeduren mergen
@@ -97,7 +97,11 @@ def get_prozedur_charlson_pivot(df_prozeduren):
     df_dummies = pd.get_dummies(df_merged_filtered['charlson_group'], prefix='charlson_group')
     df_result = pd.concat([df_merged_filtered[['Fallnummer', 'prozedur_datetime']], df_dummies], axis=1)
 
+    col_names_pivot = CHARLSON_GROUPS.copy()
+    col_names_pivot.extend(['Fallnummer', 'prozedur_datetime'])
+
     df_final = df_result.groupby(['Fallnummer', 'prozedur_datetime']).max().reset_index()
+    df_final_small = df_final[col_names_pivot]
     # print(f"len(df_final): {len(df_final)}")
 
-    return df_final
+    return df_final_small

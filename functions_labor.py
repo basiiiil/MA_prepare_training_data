@@ -117,37 +117,48 @@ def get_complete_laborwerte_ddf():
         encoding='utf_8',
         blocksize="64MB"
     )
-    df_labor_blutgase['probeneingang_dt'] = dd.to_datetime(
-        df_labor_blutgase['Probeneingangsdatum'],
-        format='%Y-%m-%dT%H:%M:%S%z'
+    df_labor_blutgase['Probeneingangsdatum'] = df_labor_blutgase['Probeneingangsdatum'].fillna(
+        df_labor_blutgase['Ergebnisdatum']
     )
-    df_labor_blutgase['probeneingang_dt'] = df_labor_blutgase['probeneingang_dt'].dt.tz_localize(None)
-    df_labor_blutgase['ergebnis_dt'] = dd.to_datetime(
-        df_labor_blutgase['Ergebnisdatum'],
-        format='%Y-%m-%dT%H:%M:%S%z'
-    )
-    df_labor_blutgase['ergebnis_dt'] = df_labor_blutgase['ergebnis_dt'].dt.tz_localize(None)
-    df_labor_blutgase['time_diff'] = df_labor_blutgase['ergebnis_dt'] - df_labor_blutgase['probeneingang_dt']
-    df_labor_blutgase['time_diff_seconds'] = df_labor_blutgase['time_diff'].dt.total_seconds()
+
+
+
+    # df_labor_blutgase['probeneingang_dt'] = dd.to_datetime(
+    #     df_labor_blutgase['Probeneingangsdatum'],
+    #     format='%Y-%m-%dT%H:%M:%S%z'
+    # )
+    # df_labor_blutgase['probeneingang_dt'] = df_labor_blutgase['probeneingang_dt'].dt.tz_localize(None)
+    # df_labor_blutgase['ergebnis_dt'] = dd.to_datetime(
+    #     df_labor_blutgase['Ergebnisdatum'],
+    #     format='%Y-%m-%dT%H:%M:%S%z'
+    # )
+    # df_labor_blutgase['ergebnis_dt'] = df_labor_blutgase['ergebnis_dt'].dt.tz_localize(None)
+    # df_labor_blutgase['time_diff'] = df_labor_blutgase['ergebnis_dt'] - df_labor_blutgase['probeneingang_dt']
+    # df_labor_blutgase['time_diff_seconds'] = df_labor_blutgase['time_diff'].dt.total_seconds()
 
     # Filtere Blutgase, sodass Zeilen mit Ergebnis- VOR Eingangsdatum,
     # sowie alle Zeilen mit Parameter-ID 'O-PROBENTYP' rausfliegen.
-    query_str = "time_diff_seconds >= 0 and time_diff_seconds <=1800 and `Parameter-ID primär` != 'O-PROBENTYP'"
-    df_labor_blutgase_filtered = df_labor_blutgase.query(query_str)
+    # query_str = "time_diff_seconds >= 0 and time_diff_seconds <=1800 and `Parameter-ID primär` != 'O-PROBENTYP'"
+    # df_labor_blutgase_filtered = df_labor_blutgase.query(query_str)
     # df_labor_blutgase_filtered = df_labor_blutgase[
     #     (0 <= df_labor_blutgase['time_diff_seconds'] <= 1800)
     #     & (df_labor_blutgase['Parameter-ID primär'] != 'O-PROBENTYP')
     # ]
-    df_labor_blutgase_filtered_small = df_labor_blutgase_filtered[[
-        'Fallnummer',
-        'Probeneingangsdatum',
-        'Ergebnisdatum',
-        'Parameterbezeichnung',
-        'Ergebniswert',
-        'Parameter-ID primär',
-    ]]
+    # df_labor_blutgase_filtered_small = df_labor_blutgase_filtered[[
+    #     'Fallnummer',
+    #     'Probeneingangsdatum',
+    #     'Ergebnisdatum',
+    #     'Parameterbezeichnung',
+    #     'Ergebniswert',
+    #     'Parameter-ID primär',
+    # ]]
 
-    df_labor_complete = dd.concat([df_labor_original, df_labor_fehlende, df_labor_blutgase_filtered_small])
+    df_labor_complete = dd.concat([
+        df_labor_original,
+        df_labor_fehlende,
+        df_labor_blutgase,
+        # df_labor_blutgase_filtered_small
+    ])
 
     return df_labor_complete
 
@@ -366,7 +377,6 @@ def get_prozedur_labor_pivot_pandas(df_prozeduren, labor_window_in_hours, varian
     )
 
     ddf_labor = get_labor_ddf(variant=variant)
-    ddf_prozeduren = dd.from_pandas(df_prozeduren)
 
     # 1. Merge Labordaten auf die Prozeduren.
     #   Dabei fliegen alle Labordaten raus, deren Fallnummer nicht in der Prozedurentabelle vorkommt.
@@ -374,9 +384,9 @@ def get_prozedur_labor_pivot_pandas(df_prozeduren, labor_window_in_hours, varian
     #   Fensters liegt (also nach 'prozedur_fenster_start', aber vor 'prozedur_datetime'.
     #   Pro Prozedur wird es dadurch für jeden Laborwert eine Zeile geben.
     ddf_labor['Fallnummer'] = ddf_labor['Fallnummer'].astype('int32')
-    ddf_prozeduren['Fallnummer'] = ddf_prozeduren['Fallnummer'].astype('int32')
+    df_prozeduren['Fallnummer'] = df_prozeduren['Fallnummer'].astype('int32')
     ddf_merged = dd.merge(
-        ddf_prozeduren,
+        df_prozeduren,
         ddf_labor,
         on=['Fallnummer'],
         how='inner',
@@ -398,10 +408,17 @@ def get_prozedur_labor_pivot_pandas(df_prozeduren, labor_window_in_hours, varian
     ]]
     # ddf_labor_latest_small['Fallnummer'] = ddf_labor_latest_small['Fallnummer'].astype('int32')
     # ddf_labor_latest_small['ergebniswert_num'] = ddf_labor_latest_small['ergebniswert_num'].astype('float32')
-    # ddf_labor_latest_small = ddf_labor_latest_small.categorize(columns=['parameterid_effektiv'])
+    # laborparam_categories = CategoricalDtype(LABOR_PARAMS_EFFEKTIV)
+    # ddf_labor_latest_small = ddf_labor_latest_small['parameterid_effektiv'].astype(laborparam_categories)
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Wandle df_labor_latest in pandas df um...")
     df_labor_latest_pandas = ddf_labor_latest_small.compute()
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Umwandlung abgeschlossen.")
+    # print(f"Länge df_labor_latest_pandas: {len(df_labor_latest_pandas)}")
+    # num_proz_df_labor_latest_pandas = df_labor_latest_pandas.drop_duplicates(
+    #     subset=['Fallnummer', 'prozedur_datetime']
+    # ).copy()
+    # print(f"Länge num_proz_df_labor_latest_pandas: {len(num_proz_df_labor_latest_pandas)}")
+
 
     # 5. Erstelle Pivottabelle
     #    Wir nutzen set_index().unstack() statt pivot_table(),
@@ -413,6 +430,7 @@ def get_prozedur_labor_pivot_pandas(df_prozeduren, labor_window_in_hours, varian
 
     # 5.2. Wähle die Wertespalte (jetzt eine Series)
     value_series = indexed_pandas_df['ergebniswert_num']
+    # print(f"Länge value_series: {len(value_series)}")
 
     # 5.3. "Entstapel" die 'parameterid_effektiv'-Ebene zu Spalten
     #     Dies erstellt nur Zeilen für existierende (Fall, Zeit)-Paare.
