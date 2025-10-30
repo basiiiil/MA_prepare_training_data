@@ -300,26 +300,25 @@ def normalize_ids_and_timestamps(ddf):
     # )
 
     # 1.2 Umrechnung der Zeiten der AccuChekWerte: Nutze Zeiten aus 'Parameter-ID primär'
-    ddf['probeneingang_tag'] = ddf['Probeneingangsdatum'].dt.floor('D')
+    probeneingang_tag = ddf['Probeneingangsdatum'].dt.floor('D')
+
     # 1.2.1 Extrahiere Zeitstring
-    ddf['accuchek_strings'] = ddf['Parameter-ID primär'].where(
+    accuchek_strings_complete = ddf['Parameter-ID primär'].where(
         ddf['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False)
     )
-    ddf['accuchek_strings'] = ddf['accuchek_strings'].str.split('.', n=1, expand=True)[1]
-    # 1.2.2 Konvertiere Strings zu Stunden und Minuten (Float wegen Fehlwerten)
-    ddf['accuchek_hours'] = ddf['accuchek_strings'].str[:2].astype('f8')
-    ddf['accuchek_mins'] = ddf['accuchek_strings'].str[2:4].astype('f8')
-    ddf['ac_timedelta'] = dd.to_timedelta(
-        ddf['accuchek_hours'], unit='h'
-    ) + dd.to_timedelta(ddf['accuchek_mins'], unit='m')
+    accuchek_strings = accuchek_strings_complete.str.split('.', n=1, expand=True)[1]
+    accuchek_hours = accuchek_strings.str[:2].astype('f8')
+    accuchek_mins = accuchek_strings.str[2:4].astype('f8')
+    accuchek_timedelta = dd.to_timedelta(
+        accuchek_hours, unit='h'
+    ) + dd.to_timedelta(accuchek_mins, unit='m')
+
     # 1.2.3 Übernehme 'Probeneingangsdatum' als 'abnahmezeitpunkt_effektiv',
     #       außer für AccuCheckwerte: Nutze Datum plus Zeit aus 'Parameter-ID primär'
     ddf['abnahmezeitpunkt_effektiv'] = ddf['Probeneingangsdatum'].mask(
         ddf['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
-        ddf['probeneingang_tag'] + ddf['ac_timedelta']
+        probeneingang_tag + accuchek_timedelta
     )
-
-
 
     # 2. 'parameterid_effektiv' für Glukose und Elektrolyte zusammenführen
     # Glucose: 'G-GLU_K', 'GLU_F', 'GLU_S', 'O-GLU_Z', 'O-GLU_Z.xxxx' zusammenführen zu 'x-GLU_x'
@@ -375,9 +374,9 @@ def normalize_ids_and_timestamps(ddf):
     #     'Natrium (Serum oder BGA)'
     # )
 
-    ddf_slim = ddf[['Fallnummer', 'parameterid_effektiv', 'abnahmezeitpunkt_effektiv', 'ergebniswert_num']]
+    # ddf_slim = ddf[['Fallnummer', 'parameterid_effektiv', 'abnahmezeitpunkt_effektiv', 'ergebniswert_num']]
 
-    ddf_dedup = ddf_slim.drop_duplicates().copy()
+    ddf_dedup = ddf.drop_duplicates().copy()
 
     print(
         datetime.datetime.now().strftime("%H:%M:%S")

@@ -223,11 +223,30 @@ def main():
     ddf = get_labor_ddf('complete')
     print(ddf.columns)
 
+    ddf_accuchek = ddf[ddf['Parameter-ID primär'].str.contains(r"GLU_", regex=True, na=False)]
+
+    ddf_accuchek['ac_mins'] = ddf_accuchek['abnahmezeitpunkt_effektiv'].dt.minute
+    ddf_accuchek['is_quarter'] = (ddf_accuchek['ac_mins'] % 15) == 0
+
+    ddf_accuchek['paramid'] = ddf_accuchek['Parameter-ID primär'].mask(
+        ddf_accuchek['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
+        "O-GLU_Z.x"
+    )
+
+
+    grouped = ddf_accuchek[['paramid', 'is_quarter']].groupby(
+        ['paramid', 'is_quarter']
+    ).size()
+
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Start computing...")
-    df_pandas = ddf.compute()
+    # accuchek_value_counts = ddf_accuchek['paramid'].value_counts(dropna=False).compute()
+    # quarter_value_counts = ddf_accuchek['is_quarter'].value_counts(dropna=False).compute()
+    df_pandas = grouped.compute()
+
+
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Computing fertig.\n\n")
 
-    print(df_pandas.shape)
+    print(df_pandas)
 
 
 if __name__ == '__main__':
