@@ -69,7 +69,7 @@ def get_complete_laborwerte_ddf():
         'Fallnummer': int,
         'Probeneingangsdatum': str,
         'Ergebnisdatum': str,
-        'Parameterbezeichnung': str,
+        # 'Parameterbezeichnung': str,
         'Ergebniswert': str,
         # 'Ergebniseinheit': str,
         # 'Ergebniseinheit (UCUM)': str,
@@ -78,6 +78,14 @@ def get_complete_laborwerte_ddf():
         'Parameter-ID primär': str,
         # 'LOINC-Code': str,
         # 'Probenart': str,
+    }
+
+    dtypes_lis = {
+        'FallNr': int,
+        'AuftSortDatZeit': str,
+        'ErgeDatZeit': str,
+        'Ergebnis': str,
+        'AnfoCode': str,
     }
 
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Lese die Labor-CSVs...")
@@ -117,50 +125,73 @@ def get_complete_laborwerte_ddf():
         encoding='utf_8',
         blocksize="64MB"
     )
+    df_labor_kalium = dd.read_csv(
+        urlpath='fromDIZ/Laborwerte/K_H_2015-2024.csv',
+        dtype=dtypes_lis,
+        usecols=dtypes_lis.keys(),
+        delimiter=';',
+        decimal=',',
+        encoding='utf_8',
+        blocksize="64MB"
+    )
+    df_labor_accuchek = dd.read_csv(
+        urlpath='fromDIZ/Laborwerte/O-GLU_Z.xxxx_2020-2024.csv',
+        dtype=dtypes_lis,
+        usecols=dtypes_lis.keys(),
+        delimiter=';',
+        decimal=',',
+        encoding='utf_8',
+        blocksize="64MB"
+    )
+
+    # Bereinige df_labor_blutgase
     df_labor_blutgase['Probeneingangsdatum'] = df_labor_blutgase['Probeneingangsdatum'].fillna(
         df_labor_blutgase['Ergebnisdatum']
     )
+    df_labor_blutgase_filtered = df_labor_blutgase[df_labor_blutgase['Parameter-ID primär'] != 'O-PROBENTYP']
 
+    # Bereinige df_labor_kalium
+    df_labor_kalium['Fallnummer'] = df_labor_kalium['FallNr']
+    df_labor_kalium['Probeneingangsdatum'] = df_labor_kalium['AuftSortDatZeit']
+    df_labor_kalium['Ergebnisdatum'] = df_labor_kalium['ErgeDatZeit']
+    df_labor_kalium['Ergebniswert'] = df_labor_kalium['Ergebnis']
+    df_labor_kalium['Parameter-ID primär'] = df_labor_kalium['AnfoCode']
 
+    # Bereinige df_labor_accuchek
+    df_labor_accuchek['Fallnummer'] = df_labor_accuchek['FallNr']
+    df_labor_accuchek['Probeneingangsdatum'] = df_labor_accuchek['AuftSortDatZeit']
+    df_labor_accuchek['Ergebnisdatum'] = df_labor_accuchek['ErgeDatZeit']
+    df_labor_accuchek['Ergebniswert'] = df_labor_accuchek['Ergebnis']
+    df_labor_accuchek['Parameter-ID primär'] = df_labor_accuchek['AnfoCode']
 
-    # df_labor_blutgase['probeneingang_dt'] = dd.to_datetime(
-    #     df_labor_blutgase['Probeneingangsdatum'],
-    #     format='%Y-%m-%dT%H:%M:%S%z'
-    # )
-    # df_labor_blutgase['probeneingang_dt'] = df_labor_blutgase['probeneingang_dt'].dt.tz_localize(None)
-    # df_labor_blutgase['ergebnis_dt'] = dd.to_datetime(
-    #     df_labor_blutgase['Ergebnisdatum'],
-    #     format='%Y-%m-%dT%H:%M:%S%z'
-    # )
-    # df_labor_blutgase['ergebnis_dt'] = df_labor_blutgase['ergebnis_dt'].dt.tz_localize(None)
-    # df_labor_blutgase['time_diff'] = df_labor_blutgase['ergebnis_dt'] - df_labor_blutgase['probeneingang_dt']
-    # df_labor_blutgase['time_diff_seconds'] = df_labor_blutgase['time_diff'].dt.total_seconds()
-
-    # Filtere Blutgase, sodass Zeilen mit Ergebnis- VOR Eingangsdatum,
-    # sowie alle Zeilen mit Parameter-ID 'O-PROBENTYP' rausfliegen.
-    # query_str = "time_diff_seconds >= 0 and time_diff_seconds <=1800 and `Parameter-ID primär` != 'O-PROBENTYP'"
-    # df_labor_blutgase_filtered = df_labor_blutgase.query(query_str)
-    # df_labor_blutgase_filtered = df_labor_blutgase[
-    #     (0 <= df_labor_blutgase['time_diff_seconds'] <= 1800)
-    #     & (df_labor_blutgase['Parameter-ID primär'] != 'O-PROBENTYP')
-    # ]
-    # df_labor_blutgase_filtered_small = df_labor_blutgase_filtered[[
-    #     'Fallnummer',
-    #     'Probeneingangsdatum',
-    #     'Ergebnisdatum',
-    #     'Parameterbezeichnung',
-    #     'Ergebniswert',
-    #     'Parameter-ID primär',
-    # ]]
+    # Filtere auf relevante Spalten
+    df_labor_kalium_slim = df_labor_kalium[[
+        'Fallnummer',
+        'Probeneingangsdatum',
+        'Ergebnisdatum',
+        'Ergebniswert',
+        'Parameter-ID primär'
+    ]]
+    df_labor_accuchek_slim = df_labor_accuchek[[
+        'Fallnummer',
+        'Probeneingangsdatum',
+        'Ergebnisdatum',
+        'Ergebniswert',
+        'Parameter-ID primär'
+    ]]
 
     df_labor_complete = dd.concat([
         df_labor_original,
         df_labor_fehlende,
-        df_labor_blutgase,
-        # df_labor_blutgase_filtered_small
+        df_labor_blutgase_filtered,
+        df_labor_kalium_slim,
+        df_labor_accuchek_slim,
     ])
 
-    df_labor_complete_dedup = df_labor_complete.drop_duplicates().copy()
+    df_labor_complete_slim = df_labor_complete.drop(columns=['Ergebnisdatum'])
+    df_labor_complete_slim_nona = df_labor_complete_slim.dropna()
+
+    df_labor_complete_dedup = df_labor_complete_slim_nona.drop_duplicates().copy()
 
     return df_labor_complete_dedup
 
@@ -179,8 +210,7 @@ def filter_for_relevant_rows(ddf, variant):
         ddf = ddf[ddf['Parameter-ID primär'].isin(PARAMS_TO_INCLUDE)]
 
     ddf_clean = ddf[
-        ddf['Parameterbezeichnung'].notnull()
-        & ddf['ergebniswert_num'].notnull()
+        ddf['ergebniswert_num'].notnull()
         & ddf['Fallnummer'].notnull()
         & ddf['Probeneingangsdatum'].notnull()
     ].copy()
@@ -252,69 +282,109 @@ def calculate_effective_time(partition_df, pattern):
     return result_series
 
 def normalize_ids_and_timestamps(ddf):
-    print(
-        datetime.datetime.now().strftime("%H:%M:%S")
-        + " - Korrigiere Parameter-ID und Auftragszeitpunkt für Glukose AccuCheck..."
-    )
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Korrigiere Parameter-IDs und Abnahmezeitpunkte...")
 
-    # parameterid_effektiv und Bezeichnung für Glucose AccuCheck-Werte setzen
-    ddf['parameterid_effektiv'] = ddf['Parameter-ID primär'].mask(
-        ddf['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
-        'O-GLU_Z.x'
-    )
-    ddf['parameterbezeichnung_effektiv'] = ddf['Parameterbezeichnung'].mask(
-        ddf['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
-        'Glukose AccuChek'
-    )
-
-    # abnahmezeitpunkt_effektiv für alle Werte setzen
+    # 1. 'abnahmezeitpunkt_effektiv' für alle Werte setzen.
+    # 1.1 Probeneingangsdatum zu datetime
     ddf['Probeneingangsdatum'] = dd.to_datetime(
         ddf['Probeneingangsdatum'],
-        format='%Y-%m-%dT%H:%M:%S%z'
+        format='%Y-%m-%dT%H:%M:%S%z',
+        utc=True, # True, um mit unterschiedlichen Offsets umgehen zu können
     )
     ddf['Probeneingangsdatum'] = ddf['Probeneingangsdatum'].dt.tz_localize(None)
-    meta = ('abnahmezeitpunkt_effektiv', ddf['Probeneingangsdatum'].dtype)
-    ddf['abnahmezeitpunkt_effektiv'] = ddf.map_partitions(
-        calculate_effective_time,
-        r"O-GLU_Z\.(\d{4})",
-        meta=meta,
+    # meta = ('abnahmezeitpunkt_effektiv', ddf['Probeneingangsdatum'].dtype)
+    # ddf['abnahmezeitpunkt_effektiv'] = ddf.map_partitions(
+    #     calculate_effective_time,
+    #     r"O-GLU_Z\.(\d{4})",
+    #     meta=meta,
+    # )
+
+    # 1.2 Umrechnung der Zeiten der AccuChekWerte: Nutze Zeiten aus 'Parameter-ID primär'
+    ddf['probeneingang_tag'] = ddf['Probeneingangsdatum'].dt.floor('D')
+    # 1.2.1 Extrahiere Zeitstring
+    ddf['accuchek_strings'] = ddf['Parameter-ID primär'].where(
+        ddf['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False)
+    )
+    ddf['accuchek_strings'] = ddf['accuchek_strings'].str.split('.', n=1, expand=True)[1]
+    # 1.2.2 Konvertiere Strings zu Stunden und Minuten (Float wegen Fehlwerten)
+    ddf['accuchek_hours'] = ddf['accuchek_strings'].str[:2].astype('f8')
+    ddf['accuchek_mins'] = ddf['accuchek_strings'].str[2:4].astype('f8')
+    ddf['ac_timedelta'] = dd.to_timedelta(
+        ddf['accuchek_hours'], unit='h'
+    ) + dd.to_timedelta(ddf['accuchek_mins'], unit='m')
+    # 1.2.3 Übernehme 'Probeneingangsdatum' als 'abnahmezeitpunkt_effektiv',
+    #       außer für AccuCheckwerte: Nutze Datum plus Zeit aus 'Parameter-ID primär'
+    ddf['abnahmezeitpunkt_effektiv'] = ddf['Probeneingangsdatum'].mask(
+        ddf['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
+        ddf['probeneingang_tag'] + ddf['ac_timedelta']
     )
 
-    # parameterid_effektiv für Chlorid, Kalium und Natrium aus Serum und Vollblut zusammenführen
+
+
+    # 2. 'parameterid_effektiv' für Glukose und Elektrolyte zusammenführen
+    # Glucose: 'G-GLU_K', 'GLU_F', 'GLU_S', 'O-GLU_Z', 'O-GLU_Z.xxxx' zusammenführen zu 'x-GLU_x'
+    ddf['parameterid_effektiv'] = ddf['Parameter-ID primär'].mask(
+        ddf['Parameter-ID primär'].str.contains(r"GLU_", regex=True, na=False),
+        'x-GLU_x'
+    )
+
     # Chlorid: 'CL_S' und 'O-CL_Z' zu 'CL_serum_oder_bga'
     ddf['parameterid_effektiv'] = ddf['parameterid_effektiv'].mask(
-        (ddf['Parameter-ID primär'].str.fullmatch("CL_S") | ddf['Parameter-ID primär'].str.fullmatch("O-CL_Z")),
-        'CL_serum_oder_bga'
+        (
+                ddf['Parameter-ID primär'].str.fullmatch("CL_S")
+                | ddf['Parameter-ID primär'].str.fullmatch("O-CL_Z")
+        ),
+        'x-CL_x'
     )
-    # Kalium: 'K_S' und 'O-K_Z' zu 'K_serum_oder_bga'
+    # Kalium: 'K_S' und 'O-K_Z' und 'K_H' zu 'K_serum_oder_bga'
     ddf['parameterid_effektiv'] = ddf['parameterid_effektiv'].mask(
-        (ddf['Parameter-ID primär'].str.fullmatch("K_S") | ddf['Parameter-ID primär'].str.fullmatch("O-K_Z")),
-        'K_serum_oder_bga'
+        (
+                ddf['Parameter-ID primär'].str.fullmatch("K_S")
+                | ddf['Parameter-ID primär'].str.fullmatch("O-K_Z")
+                | ddf['Parameter-ID primär'].str.fullmatch("K_H")
+        ),
+        'x-K_x'
     )
     # Natrium: 'NA_S' und 'O-NA_Z' zu 'NA_serum_oder_bga'
     ddf['parameterid_effektiv'] = ddf['parameterid_effektiv'].mask(
-        (ddf['Parameter-ID primär'].str.fullmatch("NA_S") | ddf['Parameter-ID primär'].str.fullmatch("O-NA_Z")),
-        'NA_serum_oder_bga'
+        (
+                ddf['Parameter-ID primär'].str.fullmatch("NA_S")
+                | ddf['Parameter-ID primär'].str.fullmatch("O-NA_Z")
+        ),
+        'x-NA_x'
     )
 
-    # parameterbezeichnung_effektiv für Chlorid, Kalium und Natrium aus Serum und Vollblut zusammenführen
+    # 3. 'parameterbezeichnung_effektiv' für Glukose und Elektrolyte zusammenführen
+    # ddf['parameterbezeichnung_effektiv'] = ddf['Parameterbezeichnung'].mask(
+    #     ddf['Parameter-ID primär'].str.contains(r"GLU_", regex=True, na=False),
+    #     'Glukose AccuChek'
+    # )
     # Chlorid: 'CL_S' und 'O-CL_Z' zu 'Chlorid (Serum oder BGA)'
-    ddf['parameterbezeichnung_effektiv'] = ddf['parameterbezeichnung_effektiv'].mask(
-        (ddf['Parameter-ID primär'].str.fullmatch("CL_S") | ddf['Parameter-ID primär'].str.fullmatch("O-CL_Z")),
-        'Chlorid (Serum oder BGA)'
-    )
-    # Kalium: 'K_S' und 'O-K_Z' zu 'Kalium (Serum oder BGA)'
-    ddf['parameterbezeichnung_effektiv'] = ddf['parameterbezeichnung_effektiv'].mask(
-        (ddf['Parameter-ID primär'].str.fullmatch("K_S") | ddf['Parameter-ID primär'].str.fullmatch("O-K_Z")),
-        'Kalium (Serum oder BGA)'
-    )
-    # Natrium: 'NA_S' und 'O-NA_Z' zu 'Natrium (Serum oder BGA)'
-    ddf['parameterbezeichnung_effektiv'] = ddf['parameterbezeichnung_effektiv'].mask(
-        (ddf['Parameter-ID primär'].str.fullmatch("NA_S") | ddf['Parameter-ID primär'].str.fullmatch("O-NA_Z")),
-        'Natrium (Serum oder BGA)'
+    # ddf['parameterbezeichnung_effektiv'] = ddf['parameterbezeichnung_effektiv'].mask(
+    #     (ddf['Parameter-ID primär'].str.fullmatch("CL_S") | ddf['Parameter-ID primär'].str.fullmatch("O-CL_Z")),
+    #     'Chlorid (Serum oder BGA)'
+    # )
+    # # Kalium: 'K_S' und 'O-K_Z' zu 'Kalium (Serum oder BGA)'
+    # ddf['parameterbezeichnung_effektiv'] = ddf['parameterbezeichnung_effektiv'].mask(
+    #     (ddf['Parameter-ID primär'].str.fullmatch("K_S") | ddf['Parameter-ID primär'].str.fullmatch("O-K_Z")),
+    #     'Kalium (Serum oder BGA)'
+    # )
+    # # Natrium: 'NA_S' und 'O-NA_Z' zu 'Natrium (Serum oder BGA)'
+    # ddf['parameterbezeichnung_effektiv'] = ddf['parameterbezeichnung_effektiv'].mask(
+    #     (ddf['Parameter-ID primär'].str.fullmatch("NA_S") | ddf['Parameter-ID primär'].str.fullmatch("O-NA_Z")),
+    #     'Natrium (Serum oder BGA)'
+    # )
+
+    ddf_slim = ddf[['Fallnummer', 'parameterid_effektiv', 'abnahmezeitpunkt_effektiv', 'ergebniswert_num']]
+
+    ddf_dedup = ddf_slim.drop_duplicates().copy()
+
+    print(
+        datetime.datetime.now().strftime("%H:%M:%S")
+        + " - Parameter-IDs und Abnahmezeitpunkte erfolgreich korrigiert."
     )
 
-    return ddf
+    return ddf_dedup
 
 def get_labor_ddf(variant):
     '''

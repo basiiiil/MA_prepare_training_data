@@ -351,10 +351,10 @@ def main():
     # proz_mit_labor_und_diagnosen.dtypes.to_csv(
     #     get_now_label() + "proz_mit_labor_und_diagnosen_dtypes.csv",
     # )
-    proz_mit_labor_und_diagnosen.to_csv(
-        get_now_label() + "proz_mit_labor_und_diagnosen_final.csv",
-        index=False,
-    )
+    # proz_mit_labor_und_diagnosen.to_csv(
+    #     get_now_label() + "proz_mit_labor_und_diagnosen_final.csv",
+    #     index=False,
+    # )
 
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - All done!")
 

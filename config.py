@@ -172,9 +172,9 @@ LABOR_PARAMS_EFFEKTIV_SMALL = [
     'B-RBC_E',
     'B-RDW_E',
     'B-WBC_E',
-    'CKDEPI',
+    # 'CKDEPI',
     'CRE_S',
-    'K_serum_oder_bga',
+    # 'K_serum_oder_bga',
     'NA_serum_oder_bga',
     ]
 
