@@ -143,6 +143,15 @@ def get_complete_laborwerte_ddf():
         encoding='utf_8',
         blocksize="64MB"
     )
+    df_labor_glu_bga = dd.read_csv(
+        urlpath='fromDIZ/Laborwerte/O-GLU_Z_2014-2024.csv',
+        dtype=dtypes_lis,
+        usecols=dtypes_lis.keys(),
+        delimiter=';',
+        decimal=',',
+        encoding='utf_8',
+        blocksize="64MB"
+    )
 
     # Bereinige df_labor_blutgase
     df_labor_blutgase['Probeneingangsdatum'] = df_labor_blutgase['Probeneingangsdatum'].fillna(
@@ -164,6 +173,13 @@ def get_complete_laborwerte_ddf():
     df_labor_accuchek['Ergebniswert'] = df_labor_accuchek['Ergebnis']
     df_labor_accuchek['Parameter-ID primär'] = df_labor_accuchek['AnfoCode']
 
+    # Bereinige df_labor_glu_bga
+    df_labor_glu_bga['Fallnummer'] = df_labor_glu_bga['FallNr']
+    df_labor_glu_bga['Probeneingangsdatum'] = df_labor_glu_bga['AuftSortDatZeit']
+    df_labor_glu_bga['Ergebnisdatum'] = df_labor_glu_bga['ErgeDatZeit']
+    df_labor_glu_bga['Ergebniswert'] = df_labor_glu_bga['Ergebnis']
+    df_labor_glu_bga['Parameter-ID primär'] = df_labor_glu_bga['AnfoCode']
+
     # Filtere auf relevante Spalten
     df_labor_kalium_slim = df_labor_kalium[[
         'Fallnummer',
@@ -179,6 +195,13 @@ def get_complete_laborwerte_ddf():
         'Ergebniswert',
         'Parameter-ID primär'
     ]]
+    df_labor_glu_bga_slim = df_labor_glu_bga[[
+        'Fallnummer',
+        'Probeneingangsdatum',
+        'Ergebnisdatum',
+        'Ergebniswert',
+        'Parameter-ID primär'
+    ]]
 
     df_labor_complete = dd.concat([
         df_labor_original,
@@ -186,6 +209,7 @@ def get_complete_laborwerte_ddf():
         df_labor_blutgase_filtered,
         df_labor_kalium_slim,
         df_labor_accuchek_slim,
+        df_labor_glu_bga_slim,
     ])
 
     df_labor_complete_slim = df_labor_complete.drop(columns=['Ergebnisdatum'])
@@ -374,9 +398,9 @@ def normalize_ids_and_timestamps(ddf):
     #     'Natrium (Serum oder BGA)'
     # )
 
-    # ddf_slim = ddf[['Fallnummer', 'parameterid_effektiv', 'abnahmezeitpunkt_effektiv', 'ergebniswert_num']]
+    ddf_slim = ddf[['Fallnummer', 'parameterid_effektiv', 'abnahmezeitpunkt_effektiv', 'ergebniswert_num']]
 
-    ddf_dedup = ddf.drop_duplicates().copy()
+    ddf_dedup = ddf_slim.drop_duplicates().copy()
 
     print(
         datetime.datetime.now().strftime("%H:%M:%S")

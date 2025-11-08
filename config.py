@@ -164,19 +164,18 @@ LABOR_PARAMS_EFFEKTIV_SMALL = [
     # 'predicted_label_int',
     # 'alter_bei_prozedur',
     # 'geschlecht',
-    'B-HCT_E',
     'B-HGB_E',
-    'B-MCHC_E',
-    'B-MCH_E',
+    'B-WBC_E',
     'B-MCV_E',
+    'B-MCHC_E',
+    'B-HCT_E',
+    'B-MCH_E',
     'B-RBC_E',
     'B-RDW_E',
-    'B-WBC_E',
-    # 'CKDEPI',
+    'x-K_x',
     'CRE_S',
-    # 'K_serum_oder_bga',
-    'NA_serum_oder_bga',
-    ]
+    'x-NA_x',
+]
 
 CHARLSON_GROUPS = [
     'charlson_group_1',

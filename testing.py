@@ -3,8 +3,7 @@ from dask import dataframe as dd
 import matplotlib.pyplot as plt
 import datetime
 
-from functions_labor import get_labor_ddf, get_complete_laborwerte_ddf, filter_for_relevant_rows, \
-    normalize_ids_and_timestamps, calculate_effective_time
+from functions_labor import get_labor_ddf
 from main import get_now_label
 
 def get_blutgas_histogram():
@@ -119,59 +118,28 @@ def get_blutgas_zeitverteilung():
     )
 
 def get_unique_laborparameter():
-    # ddf_labor = get_labor_ddf('complete')
-    # df_map = pd.read_csv('labor_parameterid_bezeichnung_map.csv')
+    ddf_labor = get_labor_ddf('complete')
+    df_map = pd.read_csv('labor_parameterid_bezeichnung_map.csv')
 
-    # df_labor_params = ddf_labor[['parameterid_effektiv']].drop_duplicates().copy().compute()
+    ddf_params = ddf_labor[['parameterid_effektiv']].drop_duplicates().copy()
 
-    # df_labor_params['parameterbezeichnung_effektiv'] = df_labor_params.where(
-    #     df_labor_params['parameterid_effektiv'].isin(df_map['parameterid_effektiv'])
-    # )
-
-    ddf_labor = get_complete_laborwerte_ddf()
-    ddf = filter_for_relevant_rows(ddf_labor, 'complete')
-    # ddf_final = normalize_ids_and_timestamps(ddf)
-
-    # ddf['length_ped'] = ddf['Probeneingangsdatum'].str.len()
-    # ddf['ped_replaced'] = ddf['Probeneingangsdatum'].str.replace(r'\d', 'x', regex=True)
-
-    # 1. 'abnahmezeitpunkt_effektiv' für alle Werte setzen.
-    # Für AccuCheck wird die Zeit aus der Parameterbezeichnung genutzt
-    ddf['Probeneingangsdatum'] = dd.to_datetime(
-        ddf['Probeneingangsdatum'],
-        format='%Y-%m-%dT%H:%M:%S%z',
-        utc=True,
-    )
-    ddf['Probeneingangsdatum'] = ddf['Probeneingangsdatum'].dt.tz_localize(None)
-    ddf['probeneingang_tag'] = ddf['Probeneingangsdatum'].dt.floor('D')
-
-    ddf['accuchek_strings'] = ddf['Parameter-ID primär'].where(
-        ddf['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False)
-    )
-    ddf['accuchek_strings'] = ddf['accuchek_strings'].str.split('.', n=1, expand=True)[1]
-    ddf['accuchek_hours'] = ddf['accuchek_strings'].str[:2].astype('f8')
-    ddf['accuchek_mins'] = ddf['accuchek_strings'].str[2:4].astype('f8')
-    ddf['ac_timedelta'] = dd.to_timedelta(
-        ddf['accuchek_hours'], unit='h'
-    ) + dd.to_timedelta(ddf['accuchek_mins'], unit='m')
-    # ddf['ac_day'] = ddf['Probeneingangsdatum'].dt.floor('D')
-    # ddf['abnahmezeitpunkt_effektiv'] = ddf['ac_day'] + ddf['ac_timedelta']
-    ddf['abnahmezeitpunkt_effektiv'] = ddf['Probeneingangsdatum'].mask(
-        ddf['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
-        ddf['probeneingang_tag'] + ddf['ac_timedelta']
-    )
-
-    print(ddf.columns)
+    df_mapped = dd.merge(
+        ddf_params,
+        df_map,
+        on=['parameterid_effektiv'],
+        how='left'
+    ).reset_index()
 
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Start computing...")
-    df_pandas = ddf.compute()
-    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Computing fertig.\n\n")
+    # df_pandas = ddf_params.compute()
+    # print(datetime.datetime.now().strftime("%H:%M:%S") + " - Computing fertig.\n\n")
 
-    print(df_pandas.shape)
-
-    # print(df_pandas['length_ped'].value_counts())
-    # print(df_pandas['ped_replaced'].value_counts())
-    print(datetime.datetime.now().strftime("%H:%M:%S") + " ----- All done -----")
+    # print(df_pandas.shape)
+    df_mapped.to_csv(
+        get_now_label() + "_bga_labor_parameters.csv",
+        single_file=True
+    )
+    print(datetime.datetime.now().strftime("%H:%M:%S") + " - All done.")
 
 def test_datetime_conversions():
     df = pd.DataFrame({
@@ -220,33 +188,7 @@ def test_datetime_conversions():
     print(df_pandas)
 
 def main():
-    ddf = get_labor_ddf('complete')
-    print(ddf.columns)
-
-    ddf_accuchek = ddf[ddf['Parameter-ID primär'].str.contains(r"GLU_", regex=True, na=False)]
-
-    ddf_accuchek['ac_mins'] = ddf_accuchek['abnahmezeitpunkt_effektiv'].dt.minute
-    ddf_accuchek['is_quarter'] = (ddf_accuchek['ac_mins'] % 15) == 0
-
-    ddf_accuchek['paramid'] = ddf_accuchek['Parameter-ID primär'].mask(
-        ddf_accuchek['Parameter-ID primär'].str.contains(r"O-GLU_Z\.\d{4}", regex=True, na=False),
-        "O-GLU_Z.x"
-    )
-
-
-    grouped = ddf_accuchek[['paramid', 'is_quarter']].groupby(
-        ['paramid', 'is_quarter']
-    ).size()
-
-    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Start computing...")
-    # accuchek_value_counts = ddf_accuchek['paramid'].value_counts(dropna=False).compute()
-    # quarter_value_counts = ddf_accuchek['is_quarter'].value_counts(dropna=False).compute()
-    df_pandas = grouped.compute()
-
-
-    print(datetime.datetime.now().strftime("%H:%M:%S") + " - Computing fertig.\n\n")
-
-    print(df_pandas)
+    get_unique_laborparameter()
 
 
 if __name__ == '__main__':
