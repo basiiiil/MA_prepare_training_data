@@ -173,6 +173,8 @@ def create_time_window_heatmap(pivot_df, num_hours_per_window):
 def get_prozeduren_for_training():
     df_prozeduren = get_labeled_prozeduren_from_file()
     df_prozeduren_dedup = df_prozeduren.drop_duplicates().copy()
+    df_prozeduren_dedup["conf_gte_ninety"] = df_prozeduren_dedup['confidence'] >= 0.9
+    print(df_prozeduren_dedup[["predicted_label", "conf_gte_ninety"]].value_counts(sort=False))
 
     # 1.1 Filtere auf LAE-Kategorie 0 (=LAE ausgeschlossen) und 1 (=LAE nachgewiesen) und confidence >= 0.9
     df_prozeduren_for_training = df_prozeduren_dedup[
@@ -181,6 +183,8 @@ def get_prozeduren_for_training():
         & (df_prozeduren_dedup['confidence'] >= 0.9)
         ].copy()
 
+
+    print(df_prozeduren_for_training[["predicted_label", "conf_gte_ninety"]].value_counts(sort=False))
     print(f"{len(df_prozeduren_for_training)} von {len(df_prozeduren)} Prozeduren haben ein "
           f"confidence-Wert >= 0.9 und sind in LAE-Kategorie 'Keine LE (0)' oder 'LE vorhanden (1)'.")
 
@@ -351,10 +355,10 @@ def main():
     # proz_mit_labor_und_diagnosen.dtypes.to_csv(
     #     get_now_label() + "proz_mit_labor_und_diagnosen_dtypes.csv",
     # )
-    proz_mit_labor_und_diagnosen.to_csv(
-        get_now_label() + "proz_mit_labor_und_diagnosen_final.csv",
-        index=False,
-    )
+    # proz_mit_labor_und_diagnosen.to_csv(
+    #     get_now_label() + "proz_mit_labor_und_diagnosen_final.csv",
+    #     index=False,
+    # )
 
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - All done!")
 
