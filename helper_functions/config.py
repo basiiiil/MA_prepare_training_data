@@ -1,3 +1,23 @@
+# file and folder paths
+PATH_TO_SOURCE_DATA = 'source_data'
+PATH_TO_UNLABELED_REPORTS = 'source_data/unlabeled_reports'
+PATH_TO_LABELED_CT_REPORTS = 'source_data/labeled_ct_reports'
+PATH_TO_LAB_RESULTS = 'source_data/lab_results'
+PATH_TO_DIAGNOSES = 'source_data/diagnoses'
+PATH_TO_PROCEDURES = 'source_data/procedures'
+PATH_TO_PATIENT_MASTER_DATA = 'source_data/patient_master_data'
+
+# output paths and filenames
+OUTPUT_PATH_PROCEDURES_FOR_LABELING = 'output/for_labeling'
+OUTPUT_FN_PROCEDURES_FOR_LABELING = 'procedures_for_labeling'
+
+OUTPUT_PATH_DATASET_FOR_RISK_SCORE_TRAINING = 'output/dataset_for_risk_score_training'
+OUTPUT_FN_DATASET_FOR_RISK_SCORE_TRAINING = 'labeled_data_for_risk_score_training'
+
+
+LABEL_CONFIDENCE = 0.9
+LAB_WINDOW_IN_HOURS = 168
+
 LABOR_PARAMS_ORIGINAL = [
     'ALAT_S',
     'AP_S',

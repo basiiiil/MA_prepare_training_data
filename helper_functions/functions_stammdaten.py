@@ -1,13 +1,15 @@
 import numpy as np
 import pandas as pd
 
+from helper_functions.config import PATH_TO_PATIENT_MASTER_DATA
+
 
 def get_stammdaten_inpatients_df():
     """
     :return: pandas dataframe
     """
     df_source = pd.read_csv(
-        'fromDIZ/Stammdaten/24.07.2025_Patientenliste_3-222_Stammdaten_sf.csv',
+        f'{PATH_TO_PATIENT_MASTER_DATA}/24.07.2025_Patientenliste_3-222_Stammdaten_sf.csv',
         dtype={
             'Fallnummer': np.int_,
             # 'Patientennummer': np.int_,
@@ -25,7 +27,7 @@ def get_stammdaten_inpatients_df():
     )
 
     df_source_nachgereicht = pd.read_csv(
-        'fromDIZ/Stammdaten/Stammdaten.csv',
+        f'{PATH_TO_PATIENT_MASTER_DATA}/Stammdaten.csv',
         dtype={
             # 'Patient': np.int_,
             'Fall': np.int_,

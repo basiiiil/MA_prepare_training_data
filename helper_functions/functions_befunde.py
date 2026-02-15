@@ -2,18 +2,19 @@ import numpy as np
 import pandas as pd
 import re
 
-from util_functions import concat_csv_files
+from helper_functions.config import PATH_TO_UNLABELED_REPORTS
+from helper_functions.util_functions import concat_csv_files
 
 '''
 Zuletzt bearbeitet am 15.10.
-Dieses Script reduziert die Liste der Befunde, sodass pro Fall pro Tag nur maximal ein Befund vorliegt.
+Dieses Script reduziert die Liste der unlabeled_reports, sodass pro Fall pro Tag nur maximal ein Befund vorliegt.
 
-1. Befunde werden identifiziert und Duplikate/mehrere Versionen gefunden.
+1. unlabeled_reports werden identifiziert und Duplikate/mehrere Versionen gefunden.
     Wenn eine identifizierende Zeile im Kopf des Befundtextes (CONTENT) enthalten ist,
     wird die darin enthaltende Befundnummer genutzt, um Duplikate/Versionen zu identifizieren.
     Wenn nicht, wird die DOKNR und der gesamte Kopf des Befundtextes verglichen.
 2. Bei mehreren Versionen wird nur die neueste Version erhalten.
-3. Befunde, zu deren Fall ein weiterer Befund am selben Tag vorliegt, werden rausgeworfen.
+3. unlabeled_reports, zu deren Fall ein weiterer Befund am selben Tag vorliegt, werden rausgeworfen.
 '''
 
 USEFUL_COLS = [
@@ -50,7 +51,7 @@ def get_doc_head_info(content_text):
 
 def get_befunde_from_files():
     df_befunde = concat_csv_files(
-        folder_path='fromDIZ/Befunde',
+        folder_path=PATH_TO_UNLABELED_REPORTS,
         csv_dtype={
             'Fallnummer': int,
             'DOKNR': int,
@@ -88,8 +89,8 @@ def get_befunde_from_files():
     return df_befunde
 
 def dedup_befunde(df_befunde):
-    # 1. Befunde mit identischer Fallnummer, Befundnummer und Prozedurdatum entfernen
-    # 1a. Befunde nach Befunddatum sortieren, um immer den neuesten behalten zu können
+    # 1. unlabeled_reports mit identischer Fallnummer, Befundnummer und Prozedurdatum entfernen
+    # 1a. unlabeled_reports nach Befunddatum sortieren, um immer den neuesten behalten zu können
     df_sorted = df_befunde.sort_values(by=['befund_datum'], ignore_index=True, ascending=False)
 
     # 1b. Duplikate entfernen und neuesten Befund (laut 'befund_datum') behalten.
@@ -105,7 +106,7 @@ def dedup_befunde(df_befunde):
     return df_befunde_dedup
 
 def get_unique_befunde_per_case_day(df_befunde_dedup):
-    # Befunde entfernen, bei denen mehrere Befunde zum gleichen Fall und zum gleichen Tag,
+    # unlabeled_reports entfernen, bei denen mehrere unlabeled_reports zum gleichen Fall und zum gleichen Tag,
     # aber mit unterschiedlicher Befundnummer und unterschiedlichem Befundtext existieren
     df_grouped = df_befunde_dedup.groupby(
         by=['Fallnummer', 'prozedur_datum'],
@@ -125,7 +126,7 @@ def get_befunde_df():
     df_befunde_dedup = dedup_befunde(df_source)
 
     df_befunde_unique_case_day = get_unique_befunde_per_case_day(df_befunde_dedup)
-    print(f"\nEs existieren {len(df_befunde_unique_case_day)} Befunde, an deren Prozedurdatum "
+    print(f"\nEs existieren {len(df_befunde_unique_case_day)} unlabeled_reports, an deren Prozedurdatum "
           f"zu diesem Fall kein anderer Befund vorliegt. Somit ist eine eindeutige Zuordung "
           f"zu einer Prozedur möglich.")
 

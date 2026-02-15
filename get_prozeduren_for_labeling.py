@@ -1,9 +1,11 @@
 import pandas as pd
 import numpy as np
 
-from functions_befunde import get_befunde_df
-from functions_stammdaten import get_stammdaten_inpatients_df
-from merge_data import merge_befunde_and_prozeduren
+from helper_functions.config import PATH_TO_PROCEDURES, OUTPUT_PATH_PROCEDURES_FOR_LABELING, OUTPUT_FN_PROCEDURES_FOR_LABELING
+from helper_functions.functions_befunde import get_befunde_df
+from helper_functions.functions_stammdaten import get_stammdaten_inpatients_df
+from helper_functions.merge_data import merge_befunde_and_prozeduren
+from helper_functions.util_functions import get_now_label_for_filenames
 
 
 def get_prozeduren_df():
@@ -11,7 +13,7 @@ def get_prozeduren_df():
     :return: pandas dataframe
     """
     df_source = pd.read_csv(
-        'fromDIZ/Prozeduren/25.07.2025_Prozeduren_sf.csv',
+        f'{PATH_TO_PROCEDURES}/25.07.2025_Prozeduren_sf.csv',
         dtype={
             'Fall': np.int_,
             'OP-Code Beg.': np.str_,
@@ -26,7 +28,7 @@ def get_prozeduren_df():
     )
 
     df_source_nachgereicht = pd.read_csv(
-        'fromDIZ/Prozeduren/fehlende Prozeduren.csv',
+        f'{PATH_TO_PROCEDURES}/fehlende Prozeduren.csv',
         dtype={
             'Fallnummer': np.int_,
             'Prozedurzeit': np.str_
@@ -73,14 +75,14 @@ def get_prozeduren_df():
 
     return df_prozeduren_dedup
 
-def get_prozeduren_for_labelling():
+def get_prozeduren_for_labeling():
     # 1. Daten importieren
     df_stammdaten_inpatients = get_stammdaten_inpatients_df()
     df_befunde = get_befunde_df()
     df_prozeduren = get_prozeduren_df()
 
     # 2. Prozedurentabelle erstellen
-    # 2.1 Befunde und Prozeduren so zusammenbringen, dass für jeden Fall pro Tag nur eine Prozedur existiert.
+    # 2.1 unlabeled_reports und Prozeduren so zusammenbringen, dass für jeden Fall pro Tag nur eine Prozedur existiert.
     df_prozeduren_with_befund = merge_befunde_and_prozeduren(
         df_befunde=df_befunde,
         df_prozeduren=df_prozeduren,
@@ -119,3 +121,14 @@ def get_prozeduren_for_labelling():
 
     return df_prozeduren_no_minors
 
+def main():
+    df_prozeduren_for_labeling = get_prozeduren_for_labeling()
+
+    now_label = get_now_label_for_filenames()
+
+    df_prozeduren_for_labeling.to_csv(
+        f'./{OUTPUT_PATH_PROCEDURES_FOR_LABELING}/{now_label}{OUTPUT_FN_PROCEDURES_FOR_LABELING}.csv'
+    )
+
+if __name__ == '__main__':
+    main()

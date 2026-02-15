@@ -4,11 +4,11 @@ import matplotlib.pyplot as plt
 import datetime
 
 from functions_labor import get_labor_ddf
-from main import get_now_label
+from get_dataset_for_risk_prediction_training import get_now_label
 
 def get_blutgas_histogram():
     df_bga = dd.read_csv(
-        'fromDIZ/Laborwerte/20251024_LAE_Risiko_laboruntersuchungen_Blutgase_AS.csv',
+        'source_data/Laborwerte/20251024_LAE_Risiko_laboruntersuchungen_Blutgase_AS.csv',
         sep=';',
         usecols=[
             'Auftragsnummer',
@@ -84,7 +84,7 @@ def get_blutgas_histogram():
 
 def get_blutgas_zeitverteilung():
     df_bga = dd.read_csv(
-        'fromDIZ/Laborwerte/20251024_LAE_Risiko_laboruntersuchungen_Blutgase_AS.csv',
+        'source_data/Laborwerte/20251024_LAE_Risiko_laboruntersuchungen_Blutgase_AS.csv',
         sep=';',
         usecols=[
             'Auftragsnummer',
@@ -119,7 +119,7 @@ def get_blutgas_zeitverteilung():
 
 def get_unique_laborparameter():
     ddf_labor = get_labor_ddf('complete')
-    df_map = pd.read_csv('labor_parameterid_bezeichnung_map.csv')
+    df_map = pd.read_csv('../labor_parameterid_bezeichnung_map.csv')
 
     ddf_params = ddf_labor[['parameterid_effektiv']].drop_duplicates().copy()
 

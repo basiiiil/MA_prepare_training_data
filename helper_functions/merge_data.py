@@ -1,12 +1,11 @@
 import numpy as np
 import pandas as pd
-from dask import dataframe as dd
 
 '''
 Zuletzt bearbeitet am 15.10.
 Funktion dieses Scripts:
 1. Filtert Prozedurenliste nach Fällen, die an einem Kalendertag genau eine 3-222-Prozedur hatten.
-2. Vereinigt Befunde und Prozeduren so, dass alle Befunde und Prozeduren ohne Korrelation in der 
+2. Vereinigt unlabeled_reports und Prozeduren so, dass alle unlabeled_reports und Prozeduren ohne Korrelation in der 
     jeweils anderen Tabelle rausfliegen (inner join).
 Das Ergebnis ist eine Tabelle mit Befunden, denen jeweils genau eine Uhrzeit zugeordnet ist.
 Dabei exisitiert jede Kombi aus Fallnummer und Prozedurdatum genau einmal.  
@@ -24,14 +23,14 @@ def merge_befunde_and_prozeduren(df_befunde, df_prozeduren):
     # 2. Nur Prozeduren erhalten, zu deren Tag und Fall keine weitere Prozedur existiert
     proz_with_unique_case_date = proz_per_day_with_time[proz_per_day_with_time['num_start_times'] == 1]
 
-    # 3. Befunde und Prozeduren anhand Fallnummer und Prozedurdatum mergen.
-    # Befunde und Prozeduren ohne Entsprechung in der jeweils anderen Tabelle werden ignoriert.
+    # 3. unlabeled_reports und Prozeduren anhand Fallnummer und Prozedurdatum mergen.
+    # unlabeled_reports und Prozeduren ohne Entsprechung in der jeweils anderen Tabelle werden ignoriert.
     df_befunde_proz_merged = pd.merge(
         df_befunde, proz_with_unique_case_date,
         on=['Fallnummer', 'prozedur_datum'],
         how='inner'
     )
-    print(f"{len(df_befunde_proz_merged)} Befunde konnten eindeutig einer Prozedur zugeordnet werden.")
+    print(f"{len(df_befunde_proz_merged)} unlabeled_reports konnten eindeutig einer Prozedur zugeordnet werden.")
 
     # 5. Zur Sicherheit erneut auf Duplikate prüfen. Falls solche existieren, wird eine Exception ausgelöst.
     df_befunde_dedup_grouped = df_befunde_proz_merged.groupby(
@@ -39,7 +38,7 @@ def merge_befunde_and_prozeduren(df_befunde, df_prozeduren):
     ).size()
     if len(df_befunde_dedup_grouped[df_befunde_dedup_grouped['size'] != 1]) > 0:
         print(df_befunde_dedup_grouped.value_counts('size', dropna=False))
-        raise Exception("Es gibt noch Tage, an denen mehrere Befunde pro Fall existieren.")
+        raise Exception("Es gibt noch Tage, an denen mehrere unlabeled_reports pro Fall existieren.")
     else:
         print("\nFür jeden Falltag existiert genau 1 Befund.")
         return df_befunde_proz_merged

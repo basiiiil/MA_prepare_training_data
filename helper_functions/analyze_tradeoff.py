@@ -3,7 +3,7 @@ import pandas as pd
 from dask import dataframe as dd
 
 from functions_labor import get_labor_ddf, get_latest_lab_values
-from main import get_prozeduren_for_training, get_now_label
+from get_dataset_for_risk_prediction_training import get_prozeduren_for_training, get_now_label
 
 # 1. Hole Prozeduren, mit Zeitfenster gesamt = 7 Tage * 24h = 168h
 print(datetime.datetime.now().strftime("%H:%M:%S") + " - Let's go!")

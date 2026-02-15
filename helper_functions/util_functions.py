@@ -5,10 +5,13 @@ import datetime
 
 OUTPUT_FOLDER = 'Outputs/'
 
+def get_now_label_for_filenames():
+    return datetime.datetime.now().strftime("%Y-%m-%d_%H-%M_")
+
 def concat_csv_files(
         folder_path,
         csv_dtype,
-        csv_cols,
+        csv_cols=None,
         csv_sep=",",
         csv_encoding="utf-8",
 ):

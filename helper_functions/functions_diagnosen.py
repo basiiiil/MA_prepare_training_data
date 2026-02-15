@@ -1,15 +1,14 @@
 import datetime
 import pandas as pd
 import numpy as np
-from dask import dataframe as dd
 
-from config import CHARLSON_GROUPS
+from helper_functions.config import PATH_TO_DIAGNOSES, CHARLSON_GROUPS, PATH_TO_SOURCE_DATA
 
 
 def get_diagnosen_df():
     print(datetime.datetime.now().strftime("%H:%M:%S") + " - Lese Diagnosen...")
     df_diagnosen = pd.read_csv(
-        'fromDIZ/Diagnosen/25.07.2025_Diagnosen_sf.csv',
+        f'{PATH_TO_DIAGNOSES}/25.07.2025_Diagnosen_sf.csv',
         usecols=[
             'Fall',
             'Diagnoseschlüssel',
@@ -24,7 +23,7 @@ def get_diagnosen_df():
         }
     )
     # CSV zum Charlson Comorbidity Index laden
-    df_charlson_mapping = pd.read_csv('icd_to_charlson_mapping.csv')
+    df_charlson_mapping = pd.read_csv(f'{PATH_TO_SOURCE_DATA}/icd_to_charlson_mapping.csv')
     df_charlson_mapping['icd_prefix'] = df_charlson_mapping['icd-10-code'].str.replace('.x', '', regex=False)
     df_charlson_mapping['prefix_length'] = df_charlson_mapping['icd_prefix'].str.len()
     # Mapping-Tabelle sortieren (absteigend nach Länge)

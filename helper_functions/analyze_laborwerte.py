@@ -4,7 +4,7 @@ import numpy as np
 from dask import dataframe as dd
 
 """
-WAS DIESES SCRIPT TUN SOLL:
+WAS DIESES SCRIPT TUT:
 1. Laborwertzeilen filtern: Nur Zeilen mit folgenden Kriterien zulassen:
     1. Parameterbezeichnung ist nicht null
     2. Der Ergebniswert E ist eine Dezimalzahl (kein Text und keine Zeichen wie '<' oder '>')
@@ -33,7 +33,7 @@ USE_MINI = False
 USE_ORIGINAL_AND_CLEANUP = False
 ANALYZE = False
 FOLDER = 'Analyse Laborwerttabelle/'
-FILENAME_FILTERED = 'Analyse Laborwerttabelle/2025-10-10_12-11_Laboruntersuchungen_only_valid.csv'
+FILENAME_FILTERED = '../Analyse Laborwerttabelle/2025-10-10_12-11_Laboruntersuchungen_only_valid.csv'
 
 dtype_lib = {
     'Auftragsnummer': 'Int64',
@@ -77,7 +77,7 @@ def get_dataframe_from_file(filename, variant):
         )
     elif variant == 'original':
         df_col_names = dd.read_csv(
-            'fromDIZ/20250929_LAE_Risiko_labor_Spaltennamen_AS.csv',
+            'source_data/20250929_LAE_Risiko_labor_Spaltennamen_AS.csv',
             delimiter=';',
             header=None,
             encoding='iso-8859-1'
@@ -345,7 +345,7 @@ def filter_for_relevant_rows(ddf):
 def main():
     ddf_labor = get_dataframe_from_file(
         # filename=FOLDER + '2025-10-10_12-11_Laboruntersuchungen_only_valid.csv',
-        filename='fromDIZ/20250929_LAE_Risiko_laboruntersuchungen_AS.csv',
+        filename='source_data/20250929_LAE_Risiko_laboruntersuchungen_AS.csv',
         variant="original"
     )
 

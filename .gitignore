@@ -1,8 +1,9 @@
 /Analyse Laborwerttabelle
-/fromDIZ
+/source_data
 /fromMaria
 /Merged source files
 /Outputs
+/output
 /ready_for_final
 /ready_for_final_INCOMPLETE
 /befunde_mit_label
@@ -10,3 +11,5 @@
 *.csv
 *.png
 *.ods
+
+!charlson_group_names.csv
